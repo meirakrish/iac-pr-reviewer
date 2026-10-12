@@ -59,6 +59,7 @@ flowchart TD
 | Tool | Needed for | Check |
 |---|---|---|
 | Node.js 20.11+ | everything | `node -v` |
+| pnpm 12 | installing and running | `pnpm -v` (install: `corepack enable`) |
 | Ollama + a model | the LLM review, run locally | `ollama list` |
 | Terraform | generating plans from your own code | `terraform -version` |
 
@@ -75,12 +76,12 @@ If you don't have Terraform, see [HashiCorp's install guide](https://developer.h
 ```bash
 git clone https://github.com/meirakrish/iac-pr-reviewer.git
 cd iac-pr-reviewer
-npm install
-npm run build
-npm link
+pnpm install
+pnpm build
+pnpm link --global
 ```
 
-`npm link` puts the `iac-review` command on your PATH.
+`pnpm link --global` puts the `iac-review` command on your PATH (if pnpm asks for a global bin directory, run `pnpm setup` once and open a new shell).
 
 ### 3. Try it on a sample plan
 
@@ -240,12 +241,27 @@ It also writes the plain-English summary and the blast-radius/suggestion text fo
 
 ---
 
+## Safety
+
+- **Read-only.** The reviewer reads plan JSON and writes a report. It never runs `terraform apply` or calls a cloud API.
+- **Where plan data goes.** With Ollama the plan never leaves your machine. With Anthropic or OpenAI the trimmed plan is sent to that API; a present `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` selects that provider automatically, so set `LLM_PROVIDER=ollama` to keep a hosted key from being used.
+- **Secrets are masked first.** Values Terraform marks sensitive are replaced with a placeholder before the plan reaches the LLM.
+- **The LLM cannot lower the risk.** Rule-based findings always stay in the report, and the overall risk is at least the highest rule severity. If the LLM fails, the review still completes with the rule results.
+
+## Limitations
+
+- **AI findings can be wrong.** The report labels each finding as rule, AI or both; verify AI-only findings before acting on them.
+- **Large plans are trimmed.** Above `IAC_REVIEW_MAX_PLAN_CHARS` some resources are left out of the LLM prompt (deletes and replacements are kept first); the rule checks still see every resource.
+- **Values known only after apply** are invisible in a plan, so claims about them are guesses.
+
+---
+
 ## Testing
 
 ### Unit tests
 
 ```bash
-npm test
+pnpm test
 ```
 
 These cover the rule checks for all three clouds against real plans, rename detection, sensitive-value redaction, the merge guardrails, the LLM retry and fallback, the markdown output and config parsing. They don't need Ollama, an API key or Terraform.
@@ -253,21 +269,21 @@ These cover the rule checks for all three clouds against real plans, rename dete
 Type checking and code formatting ([Prettier](https://prettier.io)):
 
 ```bash
-npm run typecheck
+pnpm typecheck
 ```
 
 ```bash
-npm run format
+pnpm format
 ```
 
-`npm run format:check` reports unformatted files without changing them.
+`pnpm format:check` reports unformatted files without changing them.
 
 ### Evals: how good is the LLM?
 
 `evals/cases/` holds 25 scenarios across AWS (01-11), Azure (12-16), GCP (17-22) and Terraform modules (23-25), 6 safe and 19 risky, each with a real Terraform plan and the findings a good reviewer should report. The eval runs the full pipeline on every case and scores it:
 
 ```bash
-npm run eval
+pnpm eval
 ```
 
 ```
@@ -297,15 +313,15 @@ The "prechecks only" column is the rule-based baseline, so you can see how much 
 Useful variations:
 
 ```bash
-npm run eval -- --model qwen2.5:7b-instruct
+pnpm eval --model qwen2.5:7b-instruct
 ```
 
 ```bash
-npm run eval -- --provider anthropic
+pnpm eval --provider anthropic
 ```
 
 ```bash
-npm run eval -- --case 09
+pnpm eval --case 09
 ```
 
 The first compares a different model, the second uses a hosted provider (needs `ANTHROPIC_API_KEY`), and the third runs a single case. Full results are saved to `evals/results/` (git-ignored).
@@ -349,7 +365,7 @@ To compare several local models at once (download, GPU-fit check, two cold eval 
 | `cudaMalloc failed: out of memory` | The GPU doesn't have enough free memory to load the model. Close other GPU-heavy apps (browsers can use a lot) and retry, or lower the context with `LLM_NUM_CTX=8192`. |
 | `ollama pull` fails with `Error: EOF` | An interrupted earlier download left partial files. Delete the `*-partial*` files in Ollama's models folder (on Linux: `/usr/share/ollama/.ollama/models/blobs/`, needs sudo) and pull again. |
 | `Plan is not valid JSON` | You passed the binary plan. Run `terraform show -json plan.tfplan > plan.json` first. |
-| `iac-review: command not found` | Run `npm run build && npm link` in the repo, or use `npx tsx src/cli.ts` instead. |
+| `iac-review: command not found` | Run `pnpm build && pnpm link --global` in the repo, or use `pnpm iac-review …` from the repo instead. |
 
 ---
 
@@ -377,3 +393,15 @@ examples/
   localstack/       try it against infrastructure deployed to LocalStack in Docker
 scripts/            helper scripts (Terraform install)
 ```
+
+## Related projects
+
+Part of a small set of LLM-assisted DevOps tools that share one LLM layer, one severity scale (`low` < `medium` < `high` < `critical`) and the same `LLM_*` settings:
+
+- [k8s-devops-agent](https://github.com/meirakrish/k8s-devops-agent): read-only Kubernetes health checks with LLM triage and root-cause investigation
+- [iac-pr-reviewer](https://github.com/meirakrish/iac-pr-reviewer): risk review of Terraform plans before they are applied
+- [llm-kit](https://github.com/meirakrish/llm-kit): the shared LLM layer (providers, structured output, retries, token metering, Ollama safeguards)
+
+## License
+
+MIT, see [LICENSE](LICENSE).

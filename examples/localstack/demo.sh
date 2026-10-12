@@ -75,7 +75,7 @@ cmd_review() {
     echo "LocalStack isn't running; run: ./demo.sh up" >&2
     exit 1
   }
-  [[ -f "$REPO/dist/cli.js" ]] || (cd "$REPO" && npm run build >/dev/null)
+  [[ -f "$REPO/dist/cli.js" ]] || (cd "$REPO" && pnpm build >/dev/null)
 
   log "Scenario: $scenario"
   use_config "$scenario"

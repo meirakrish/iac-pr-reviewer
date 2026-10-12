@@ -2,30 +2,36 @@
   "name": "iac-pr-reviewer",
   "version": "1.0.0",
   "description": "LLM-powered reviewer for Terraform plan changes",
-  "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "iac-review": "tsx src/cli.ts",
-    "eval": "tsx evals/run.ts",
-    "format": "prettier --write .",
-    "format:check": "prettier --check ."
-  },
+  "license": "MIT",
+  "type": "module",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/meirakrish/iac-pr-reviewer.git"
   },
-  "license": "MIT",
+  "homepage": "https://github.com/meirakrish/iac-pr-reviewer#readme",
   "bugs": {
     "url": "https://github.com/meirakrish/iac-pr-reviewer/issues"
   },
-  "homepage": "https://github.com/meirakrish/iac-pr-reviewer#readme",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "bin": {
+    "iac-review": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc",
+    "test": "vitest run",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "iac-review": "tsx src/cli.ts",
+    "eval": "tsx evals/run.ts"
+  },
   "dependencies": {
     "@langchain/anthropic": "^1.5.12",
     "@langchain/core": "^1.2.17",
     "@langchain/openai": "^1.6.2",
-    "@meirakrish/llm-kit": "github:meirakrish/llm-kit",
-    "commander": "^15.0.0",
+    "@meirakrish/llm-kit": "github:meirakrish/llm-kit#ad3e32db31c7f4fda83d940ef229c1a07d6b7661",
     "zod": "^4.6.6"
   },
   "devDependencies": {
@@ -35,11 +41,5 @@
     "typescript": "^7.0.2",
     "vitest": "^5.0.3"
   },
-  "type": "module",
-  "bin": {
-    "iac-review": "dist/cli.js"
-  },
-  "engines": {
-    "node": ">=20.11"
-  }
+  "packageManager": "pnpm@12.11.2"
 }
