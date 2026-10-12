@@ -32,7 +32,7 @@ describe("reviewPlan", () => {
     });
     const r = await reviewPlan(evalPlan("09-iam-passrole-escalation"), config, { model });
     expect(r.riskLevel).toBe("high");
-    expect(r.findings).toEqual([expect.objectContaining({ source: "both", severity: "high", ruleId: "iam-wildcard" })]);
+    expect(r.findings).toEqual([expect.objectContaining({ source: "both", severity: "high", ruleId: "iam-privilege-escalation" })]);
     expect(r.llm).toMatchObject({ ok: true, provider: "ollama" });
   });
 

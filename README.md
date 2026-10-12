@@ -187,6 +187,7 @@ Every option can also be set through the environment, which is handy for CI:
 |---|---|---|
 | Destroy / replace | Resources being deleted or recreated | **critical** for data stores (RDS, S3, DynamoDB, KMS…), otherwise high/medium |
 | IAM wildcards | `Action: "*"`, `service:*`, `Resource: "*"`, `NotAction`, trust policies open to `Principal: "*"` | medium → **critical** (admin) |
+| IAM privilege escalation | `iam:PassRole` on any role plus an action that launches compute (Lambda, EC2, ECS, Glue, CloudFormation…), or self-granting IAM actions (`iam:CreatePolicyVersion`, `iam:Attach*Policy`, `iam:CreateAccessKey`…) on `Resource: "*"` | high |
 | Open ingress | `0.0.0.0/0` or `::/0` on security groups | **critical** for SSH/RDP/DB ports or all traffic, low for 80/443 |
 | Public S3 | Public ACLs, disabled public-access-block, bucket policies open to `*` | high / **critical** |
 | Unencrypted storage | RDS, Redshift, EBS, EFS, ElastiCache, EC2 volumes without encryption | medium / high |
@@ -197,7 +198,7 @@ Every option can also be set through the environment, which is handy for CI:
 On top of the rules, the LLM looks for risks that need context, for example:
 
 - databases that are publicly accessible, or have no backups, final snapshot or deletion protection
-- IAM privilege-escalation paths (`iam:PassRole`, `iam:CreatePolicyVersion`…) and cross-account trust
+- cross-account trust and other IAM risks the escalation rules don't cover
 - audit logging or monitoring being turned off, KMS keys being deleted or disabled
 - replacements that cascade to dependents (new IDs/ARNs, DNS, load balancers)
 
@@ -228,17 +229,18 @@ npm run eval
 ```
 
 ```
-✅ 06-rds-destroy                   risk critical (want critical)  3.7s
-✅ 07-rds-public-unencrypted        risk high     (want high-critical)  4.0s
-❌ 09-iam-passrole-escalation       risk medium   (want high-critical)  3.4s
-     under-rated: aws_iam_policy.deployer/iam (got medium, want ≥high)
+✅ 01-safe-tag-update               risk low      (want low)  13.5s
+✅ 07-rds-public-unencrypted        risk high     (want high-critical)  6.4s
+✅ 09-iam-passrole-escalation       risk high     (want high-critical)  3.5s
 ...
                     ollama/qwen2.5:7b-instruct   prechecks only
-risk accuracy                              91%     91%
-finding recall                             92%     67%
+risk accuracy                             100%    100%
+finding recall                            100%     75%
 finding precision                         100%    100%
 LLM-only recall                           100%      0%
 ```
+
+A failing case prints what went wrong underneath it, e.g. `missed: <resource>/<category>` or `under-rated: <resource> (got medium, want ≥high)`.
 
 | Metric | Meaning |
 |---|---|
