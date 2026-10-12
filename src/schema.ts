@@ -76,6 +76,8 @@ export const ChangeStats = z.object({
   update: z.number(),
   delete: z.number(),
   replace: z.number(),
+  /** Renamed via `moved` blocks (same object, new address). */
+  moved: z.number(),
 });
 export type ChangeStats = z.infer<typeof ChangeStats>;
 

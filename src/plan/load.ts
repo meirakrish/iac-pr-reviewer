@@ -35,11 +35,13 @@ export function changedResources(plan: TerraformPlan): ResourceChange[] {
   });
 }
 
-export function changeStats(changes: ResourceChange[]): ChangeStats {
-  const stats: ChangeStats = { create: 0, update: 0, delete: 0, replace: 0 };
+/** Counts per action for changed resources, plus resources renamed by `moved` blocks (from the full plan). */
+export function changeStats(changes: ResourceChange[], all: ResourceChange[] = changes): ChangeStats {
+  const stats: ChangeStats = { create: 0, update: 0, delete: 0, replace: 0, moved: 0 };
+  stats.moved = all.filter((rc) => rc.mode === "managed" && rc.previous_address && rc.previous_address !== rc.address).length;
   for (const rc of changes) {
     const kind = changeKind(rc.change.actions);
-    if (kind in stats) stats[kind as keyof ChangeStats]++;
+    if (kind === "create" || kind === "update" || kind === "delete" || kind === "replace") stats[kind]++;
   }
   return stats;
 }

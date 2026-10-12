@@ -1,0 +1,9 @@
+{
+  "description": "Module renamed (orders_db -> orders_database) and a bucket resource renamed (logs -> app_logs) without moved blocks: Terraform destroys the production database and bucket and creates empty ones.",
+  "risk": { "min": "critical", "max": "critical" },
+  "findings": [
+    { "resource": "module.orders_db.aws_db_instance.this", "category": "data-loss", "minSeverity": "critical" },
+    { "resource": "aws_s3_bucket.logs", "category": "data-loss", "minSeverity": "critical" },
+    { "resource": "module.orders_db.aws_security_group.db", "category": "destroy", "minSeverity": "high" }
+  ]
+}

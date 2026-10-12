@@ -1,8 +1,11 @@
 import type { Finding } from "../schema.js";
 import { changeKind, type ResourceChange } from "../plan/types.js";
+import type { DetectedMove } from "../plan/moves.js";
 
 export interface PrecheckContext {
   requiredTags: string[];
+  /** Deleted address → where it seems to have moved (renames without a `moved` block). */
+  moves?: Map<string, DetectedMove>;
 }
 
 export type Precheck = (rc: ResourceChange, ctx: PrecheckContext) => Finding[];

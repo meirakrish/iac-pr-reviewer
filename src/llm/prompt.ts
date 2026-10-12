@@ -39,7 +39,8 @@ export function buildUserMessage(input: {
   plan: TrimmedPlan;
 }): string {
   const payload = {
-    stats: input.stats,
+    // Only mention moves when there are some: keeps the prompt for ordinary plans unchanged.
+    stats: input.stats.moved ? input.stats : { ...input.stats, moved: undefined },
     precheckFindings: input.prechecks.map((f) => ({
       resource: f.resource,
       ruleId: f.ruleId,

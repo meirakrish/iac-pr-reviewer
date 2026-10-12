@@ -60,7 +60,7 @@ for (const name of caseNames) {
   runs.push({ name, ms, result, score, baseline });
 
   const ok = score.riskOk && !score.missed.length && !score.underRated.length && !score.extra.length;
-  const llmNote = config.llm && !result.llm.ok ? `  ⚠ LLM failed: ${result.llm.error}` : "";
+  const llmNote = result.llm.error ? `  ⚠ LLM failed: ${result.llm.error}` : "";
   console.log(
     `${ok ? "✅" : "❌"} ${name.padEnd(32)} risk ${result.riskLevel.padEnd(8)} (want ${expected.risk.min === expected.risk.max ? expected.risk.min : `${expected.risk.min}-${expected.risk.max}`})` +
       `  ${(ms / 1000).toFixed(1)}s${llmNote}`,
@@ -79,7 +79,7 @@ console.log(`${"risk accuracy".padEnd(18)}${pct(agg.riskAccuracy).padStart(28)} 
 console.log(`${"finding recall".padEnd(18)}${pct(agg.recall).padStart(28)}   ${pct(base.recall)}`);
 console.log(`${"finding precision".padEnd(18)}${pct(agg.precision).padStart(28)}   ${pct(base.precision)}`);
 console.log(`${"LLM-only recall".padEnd(18)}${pct(agg.llmOnlyRecall).padStart(28)}   ${pct(base.llmOnlyRecall)}`);
-const llmFailures = runs.filter((r) => config.llm && !r.result.llm.ok).length;
+const llmFailures = runs.filter((r) => r.result.llm.error).length;
 if (llmFailures) console.log(`\n⚠ LLM call failed on ${llmFailures}/${runs.length} cases; those fell back to prechecks only.`);
 console.log(`avg latency ${(runs.reduce((n, r) => n + r.ms, 0) / runs.length / 1000).toFixed(1)}s`);
 

@@ -5,7 +5,8 @@
 #   ./evals/generate-plans.sh          # all cases
 #   ./evals/generate-plans.sh 12 13    # only cases whose name contains "12" or "13"
 #
-# Each case has main.tf and optionally terraform.tfstate (to produce updates/destroys/replacements).
+# Each case has main.tf, optionally terraform.tfstate (to produce updates/destroys/replacements)
+# and optionally a modules/ folder with local modules.
 # Providers are picked from the resource types used in main.tf / terraform.tfstate.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -50,13 +51,14 @@ for dir in cases/*/; do
   matches_filter "$name" "$@" || continue
 
   work=$(mktemp -d)
-  cp "$dir"main.tf "$work"/
-  [[ -f "$dir"terraform.tfstate ]] && cp "$dir"terraform.tfstate "$work"/
+  # Copy the whole case (main.tf, optional terraform.tfstate, local modules/), minus outputs.
+  cp -r "$dir". "$work"/
+  rm -f "$work"/plan.json "$work"/expected.json
 
-  # Pick providers from resource type prefixes, and write a matching required_providers block.
+  # Pick providers from resource type prefixes (including inside local modules), and write a matching required_providers block.
   providers=()
   for p in aws azurerm google; do
-    if grep -qE "(resource \"${p}_|\"type\": *\"${p}_)" "$work"/main.tf "$work"/terraform.tfstate 2>/dev/null; then
+    if grep -rqE "(resource \"${p}_|\"type\": *\"${p}_)" --include='*.tf' --include='*.tfstate' "$work" 2>/dev/null; then
       providers+=("$p")
       cp "providers/$p.tf" "$work/provider-$p.tf"
     fi

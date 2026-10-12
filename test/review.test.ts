@@ -69,6 +69,15 @@ describe("reviewPlan", () => {
     expect(r.llm.provider).toBe("none");
   });
 
+  it("skips the LLM without reporting a failure when nothing changes", async () => {
+    const model = fakeModel(new Error("should not be called"));
+    const r = await reviewPlan(evalPlan("24-module-rename-with-moved"), config, { model });
+    expect(model.calls).toBe(0);
+    expect(r.llm).toMatchObject({ provider: "ollama", ok: false, error: null });
+    expect(r.summary).toContain("3 resources are only renamed");
+    expect(renderMarkdown(r)).toContain("no AI review was needed");
+  });
+
   it("applies the fail-on threshold", async () => {
     const r = await reviewPlan(evalPlan("11-safe-alb-https"), resolveConfig({ noLlm: true }, {}));
     expect(exceedsThreshold(r, "high")).toBe(false);

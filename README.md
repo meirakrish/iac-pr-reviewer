@@ -196,6 +196,17 @@ Every option can also be set through the environment, which is handy for CI:
 
 Azure and GCP encrypt disks and storage at rest by default, so for those clouds the encryption checks focus on traffic in transit.
 
+### Terraform modules
+
+Modules need no special setup: the plan lists every resource with its full address (for example `module.app.module.database.aws_db_instance.this`), so resources inside modules, nested modules and `count`/`for_each` instances are all checked like any other resource.
+
+The tool also catches the most common module accident: **renaming or moving a module or resource without a `moved` block**. Terraform then plans to destroy the existing resources and create empty new ones. When a deleted resource reappears at a new address (same address inside a renamed module, or same name/identifier after a resource rename), the finding says so and gives the exact fix:
+
+> 🔴 critical · `module.orders_db.aws_db_instance.this` · Looks like a rename: this aws_db_instance is destroyed and recreated as `module.orders_database.aws_db_instance.this`. Without a `moved` block, Terraform deletes everything in module.orders_db instead of renaming it.
+> **Fix:** Add a `moved` block with `from = module.orders_db` and `to = module.orders_database`.
+
+When the whole module moved, the fix is one module-level `moved` block. Otherwise it's one block per resource. Renames that already use `moved` blocks are recognised as harmless, and the report shows them in the plan line (`· 3 moved`).
+
 ### LLM review
 
 On top of the rules, the LLM looks for risks that need context, for example:
@@ -225,22 +236,23 @@ npm run typecheck
 
 ### Evals: how good is the LLM?
 
-`evals/cases/` holds 22 scenarios across AWS (01-11), Azure (12-16) and GCP (17-22), 5 safe and 17 risky, each with a real Terraform plan and the findings a good reviewer should report. The eval runs the full pipeline on every case and scores it:
+`evals/cases/` holds 25 scenarios across AWS (01-11), Azure (12-16), GCP (17-22) and Terraform modules (23-25), 6 safe and 19 risky, each with a real Terraform plan and the findings a good reviewer should report. The eval runs the full pipeline on every case and scores it:
 
 ```bash
 npm run eval
 ```
 
 ```
-✅ 01-safe-tag-update               risk low      (want low)  5.4s
 ✅ 13-azure-public-storage          risk high     (want high-critical)  7.1s
-✅ 21-gcp-sql-public                risk critical (want critical)  4.9s
+✅ 23-module-rename-no-moved        risk critical (want critical)  7.6s
+❌ 25-module-nested-public-db       risk critical (want critical)  4.0s
+     under-rated: module.analytics.module.database.aws_db_instance.this/network-exposure (got medium, want ≥high)
 ...
                     ollama/qwen2.5:7b-instruct   prechecks only
 risk accuracy                             100%    100%
-finding recall                            100%     85%
+finding recall                             97%     84%
 finding precision                         100%    100%
-LLM-only recall                           100%      0%
+LLM-only recall                            80%      0%
 ```
 
 A failing case prints what went wrong underneath it, e.g. `missed: <resource>/<category>` or `under-rated: <resource> (got medium, want ≥high)`.
@@ -272,8 +284,12 @@ The first compares a different model, the second uses a hosted provider (needs `
 
 ### Adding an eval case
 
-1. Create `evals/cases/23-my-case/main.tf` with the resources you want to test. Don't include provider blocks: the generator adds the ones you need (from `evals/providers/`) based on the resource types you use.
-2. To test updates, destroys or replacements, add a `terraform.tfstate` describing the "before" state (see `06-rds-destroy` for an example).
+1. Create `evals/cases/26-my-case/main.tf` with the resources you want to test. Don't include provider blocks: the generator adds the ones you need (from `evals/providers/`) based on the resource types you use. Local modules go in a `modules/` folder inside the case.
+2. To test updates, destroys or replacements, add a `terraform.tfstate` describing the "before" state. The easiest way is to write the "before" config, plan it, and convert that plan into a realistic state:
+   ```bash
+   node evals/state-from-plan.mjs before-plan.json > evals/cases/26-my-case/terraform.tfstate
+   ```
+   `--move NEW=OLD` stores resources at an older address (for example `--move module.new=module.old`). See cases 23 and 24.
 3. Write `expected.json`:
    ```json
    {
@@ -289,7 +305,7 @@ The first compares a different model, the second uses a hosted provider (needs `
    - `optional`: a valid finding that isn't required. It doesn't count toward recall, and reporting it isn't counted as a false alarm.
 4. Generate the plan (pass part of a case name to regenerate only that case):
    ```bash
-   ./evals/generate-plans.sh 23
+   ./evals/generate-plans.sh 26
    ```
    This needs Terraform (and `openssl` for Azure cases) but no cloud account. It uses mock credentials and runs offline. For Azure, it starts a fake Azure CLI and a tiny local Resource Manager stub (`evals/mock/`), because the azurerm provider authenticates as soon as it starts.
 
@@ -325,5 +341,6 @@ evals/
   providers/        offline provider configs (aws, azurerm, google)
   mock/             fake Azure CLI + Resource Manager stub for offline Azure plans
   run.ts, score.ts  eval runner and scorer
+  state-from-plan.mjs  build a realistic terraform.tfstate for a case from a plan
 scripts/            helper scripts (Terraform install)
 ```
