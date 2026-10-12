@@ -4,3 +4,4 @@ dist/
 .env
 evals/results/
 .scratch/
+examples/localstack/.work/

@@ -45,9 +45,9 @@ flowchart TD
 ```
 
 1. **Load & trim.** Reads the `terraform show -json` output and keeps only resources that actually change. Updates are reduced to the attributes that differ, and sensitive values are replaced with `(sensitive)`.
-2. **Rule-based checks.** Deterministic checks for destroys (including renames without a `moved` block), over-broad IAM and privilege escalation, open ports, public storage, missing encryption and missing tags. They always run, even without an LLM.
+2. **Rule-based checks.** Deterministic checks for destroys (including renames without a `moved` block), backups or versioning being turned off, over-broad IAM and privilege escalation, open ports, public storage, missing encryption and missing tags. They always run, even without an LLM.
 3. **LLM review.** The model sees the trimmed plan plus the rule findings. It returns a risk level, a summary and extra findings in a strict schema.
-4. **Merge.** Combines both sets. The LLM can add findings or raise severity, but never remove or downgrade a rule finding, and it can't replace a fix the rules computed exactly. Findings about resources that aren't in the plan are dropped. If the LLM fails, the rule findings are still reported.
+4. **Merge.** Combines both sets. The LLM can add findings or raise severity, but never remove or downgrade a rule finding, and it can't replace a fix the rules computed exactly. LLM findings that can't be grounded in the plan are dropped: resources that aren't in it, updates whose new values are all unknown until apply, and low-severity "this is fine" notes. If the LLM fails, the rule findings are still reported.
 5. **Report.** A Markdown report (ready to post as a PR comment) or JSON, plus an exit code you can use to fail a build.
 
 ---
@@ -96,7 +96,15 @@ To see only the rule-based checks (instant, no LLM):
 iac-review --plan evals/cases/04-open-ssh/plan.json --no-llm
 ```
 
-### 4. Run it on your own Terraform
+### 4. Try it against deployed infrastructure (Docker)
+
+[`examples/localstack/`](examples/localstack/) deploys a small AWS stack to LocalStack (an AWS emulator in Docker) and reviews four "pull requests" against it: a safe change, a risky one, and a module rename with and without a `moved` block. No AWS account needed:
+
+```bash
+./examples/localstack/demo.sh all
+```
+
+### 5. Run it on your own Terraform
 
 From your Terraform project:
 
@@ -187,6 +195,7 @@ The review options can also be set through the environment, which is handy for C
 | Check | AWS | Azure | GCP | Severity |
 |---|---|---|---|---|
 | **Destroy / replace** | any resource; data stores (RDS, S3, DynamoDB, KMS…) | any resource; data stores (SQL, Storage, Cosmos DB, Key Vault, resource groups…) | any resource; data stores (Cloud SQL, buckets, BigQuery, KMS, projects…) | **critical** for data stores, otherwise high/medium. Renames are detected, see [modules](#terraform-modules) |
+| **Data protection turned off** | DynamoDB point-in-time recovery or deletion protection, S3 versioning, RDS backups / deletion protection / final snapshot | — | Cloud SQL backups or deletion protection, bucket versioning | high (backups, versioning) / medium (deletion protection). Also when a replacement drops a protection the current resource has |
 | **Network exposure** | security groups open to `0.0.0.0/0` / `::/0` | NSG rules from `*` / `Internet` / `0.0.0.0/0`; SQL/Postgres/MySQL firewall rules open to all IPs | firewall rules from `0.0.0.0/0`; Cloud SQL authorized networks `0.0.0.0/0` | **critical** for SSH/RDP/DB ports or all traffic, low for 80/443 |
 | **IAM** | `Action`/`Resource: "*"`, `NotAction`, trust open to `Principal: "*"` | Owner / User Access Administrator assignments; custom roles with `*` | `roles/owner`, `roles/editor`, IAM-admin roles; `allUsers` / `allAuthenticatedUsers` members | medium → **critical** (full admin, public members, or Azure admin roles at subscription scope) |
 | **Privilege escalation** | `iam:PassRole` + compute create; `iam:CreatePolicyVersion`, `iam:Attach*Policy`… on `*` | custom roles with `Microsoft.Authorization/*` write | custom roles with `actAs` + compute create, or `setIamPolicy`, SA key/token creation | high |
@@ -202,10 +211,10 @@ Modules need no special setup: the plan lists every resource with its full addre
 
 The tool also catches the most common module accident: **renaming or moving a module or resource without a `moved` block**. Terraform then plans to destroy the existing resources and create empty new ones. When a deleted resource reappears at a new address (same address inside a renamed module, or same name/identifier after a resource rename), the finding says so and gives the exact fix:
 
-> 🔴 critical · `module.orders_db.aws_db_instance.this` · Looks like a rename: this aws_db_instance is destroyed and recreated as `module.orders_database.aws_db_instance.this`. Without a `moved` block, Terraform deletes everything in module.orders_db instead of renaming it.
+> 🔴 critical · `module.orders_db` · module.orders_db was renamed to module.orders_database without a `moved` block, so Terraform destroys all 2 resources in it and creates empty copies: aws_db_instance.this, aws_security_group.db.
 > **Fix:** Add a `moved` block with `from = module.orders_db` and `to = module.orders_database`, then re-run the plan: it should show no destroy.
 
-When the whole module moved, the fix is one module-level `moved` block. Otherwise it's one block per resource. Renames that already use `moved` blocks are recognised as harmless, and the report shows them in the plan line (`· 3 moved`).
+When the whole module moved, it's reported once for the module (listing the affected resources) with one module-level `moved` block as the fix. Otherwise it's one finding and one block per resource. The fix is also added to the summary. Renames that already use `moved` blocks are recognised as harmless, and the report shows them in the plan line (`· 3 moved`).
 
 ### LLM review
 
@@ -351,5 +360,7 @@ evals/
   run.ts, score.ts  eval runner and scorer
   state-from-plan.mjs
                     build a realistic terraform.tfstate for a case from a plan
+examples/
+  localstack/       try it against infrastructure deployed to LocalStack in Docker
 scripts/            helper scripts (Terraform install)
 ```
