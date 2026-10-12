@@ -21,6 +21,9 @@ function plausible(f: LlmFinding, actions: Map<string, ChangeKind>): boolean {
   return true;
 }
 
+/** Rules whose suggestion is an exact, computed fix (e.g. the precise `moved` block); the LLM's wording must not replace it. */
+const EXACT_FIX_RULES = new Set(["missing-moved-block"]);
+
 /** Small models sometimes put a bare severity word ("High") in free-text fields; don't let that replace a rule's explanation. */
 function substantive(text: string): boolean {
   return text.trim().split(/\s+/).length >= 4;
@@ -45,7 +48,7 @@ export function mergeReview({ prechecks, llm, llmMeta, stats, actions }: MergeIn
       severity: maxSeverity([pre.severity, match.severity]),
       // Keep the deterministic issue text (it is exact), take the LLM's context-aware impact and fix.
       blastRadius: substantive(match.blastRadius) ? match.blastRadius : pre.blastRadius,
-      suggestion: substantive(match.suggestion) ? match.suggestion : pre.suggestion,
+      suggestion: !EXACT_FIX_RULES.has(pre.ruleId ?? "") && substantive(match.suggestion) ? match.suggestion : pre.suggestion,
     };
   });
 
@@ -73,10 +76,12 @@ export function mergeReview({ prechecks, llm, llmMeta, stats, actions }: MergeIn
 
 function fallbackSummary(stats: ChangeStats, findings: Finding[]): string {
   const total = stats.create + stats.update + stats.delete + stats.replace;
-  if (total === 0) return "No infrastructure changes in this plan.";
-  const parts = Object.entries(stats)
-    .filter(([, n]) => n > 0)
-    .map(([k, n]) => `${n} to ${k}`);
+  if (total === 0) {
+    return stats.moved
+      ? `No infrastructure changes: ${stats.moved} resource${stats.moved === 1 ? " is" : "s are"} only renamed via \`moved\` blocks.`
+      : "No infrastructure changes in this plan.";
+  }
+  const parts = (["create", "update", "replace", "delete"] as const).filter((k) => stats[k] > 0).map((k) => `${stats[k]} to ${k}`);
   const serious = findings.filter((f) => SEVERITY_ORDER[f.severity] >= SEVERITY_ORDER.high).length;
   return `This plan changes ${total} resource${total === 1 ? "" : "s"} (${parts.join(", ")}). ` +
     (findings.length

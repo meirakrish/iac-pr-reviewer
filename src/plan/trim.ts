@@ -6,6 +6,8 @@ export const UNKNOWN = "(known after apply)";
 
 export interface TrimmedChange {
   address: string;
+  /** The resource was renamed from this address via a `moved` block: same real-world object. */
+  movedFrom?: string;
   type: string;
   action: ChangeKind;
   actionReason?: string;
@@ -55,6 +57,7 @@ const ACTION_PRIORITY: Record<string, number> = { delete: 0, replace: 1, forget:
 export function trimChange(rc: ResourceChange): TrimmedChange {
   const action = changeKind(rc.change.actions);
   const out: TrimmedChange = { address: rc.address, type: rc.type, action };
+  if (rc.previous_address) out.movedFrom = rc.previous_address;
   if (rc.action_reason) out.actionReason = rc.action_reason;
   if (rc.change.replace_paths?.length) out.replacePaths = rc.change.replace_paths;
 

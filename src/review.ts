@@ -2,6 +2,7 @@ import type { BaseChatModel } from "@langchain/core/language_models/chat_models"
 import type { ReviewConfig } from "./config.js";
 import { changedResources, changeStats } from "./plan/load.js";
 import { trimPlan } from "./plan/trim.js";
+import { detectMoves } from "./plan/moves.js";
 import { changeKind, type TerraformPlan } from "./plan/types.js";
 import { runPrechecks } from "./prechecks/index.js";
 import { getChatModel } from "./llm/provider.js";
@@ -19,15 +20,16 @@ export interface ReviewOptions {
 export async function reviewPlan(plan: TerraformPlan, config: ReviewConfig, opts: ReviewOptions = {}): Promise<ReviewResult> {
   const log = opts.log ?? (() => {});
   const changes = changedResources(plan);
-  const stats = changeStats(changes);
-  const prechecks = runPrechecks(changes, { requiredTags: config.requiredTags });
+  const stats = changeStats(changes, plan.resource_changes ?? []);
+  const prechecks = runPrechecks(changes, { requiredTags: config.requiredTags, moves: detectMoves(plan.resource_changes ?? []) });
   log(`${changes.length} changed resources, ${prechecks.length} precheck findings`);
 
   let llm: LlmReview | null = null;
   let llmMeta: ReviewResult["llm"] = { provider: "none", model: "none", ok: false, error: null };
 
+  if (config.llm) llmMeta = { provider: config.llm.provider, model: config.llm.model, ok: false, error: null };
+  if (config.llm && changes.length === 0) log("no resource changes: skipping the LLM review");
   if (config.llm && changes.length > 0) {
-    llmMeta = { provider: config.llm.provider, model: config.llm.model, ok: false, error: null };
     try {
       const model = opts.model ?? (await getChatModel(config.llm));
       const trimmed = trimPlan(changes, config.maxPlanChars);

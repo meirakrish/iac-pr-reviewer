@@ -68,9 +68,28 @@ const STATEFUL = new Set([
   "google_artifact_registry_repository",
 ]);
 
-export const destroyCheck: Precheck = (rc) => {
+export const destroyCheck: Precheck = (rc, ctx) => {
   const kind = changeKind(rc.change.actions);
   const stateful = STATEFUL.has(rc.type);
+
+  const move = kind === "delete" ? ctx.moves?.get(rc.address) : undefined;
+  if (move) {
+    const wholeModule = move.movedFrom !== rc.address;
+    return [
+      finding(rc, "missing-moved-block", {
+        severity: stateful ? "critical" : "high",
+        category: stateful ? "data-loss" : "destroy",
+        issue:
+          `Looks like a rename: this ${rc.type} is destroyed and recreated as ${move.to}` +
+          (move.via === "identity" ? " (same name/identifier)" : "") +
+          `. Without a \`moved\` block, Terraform deletes ${wholeModule ? `everything in ${move.movedFrom}` : "the existing resource"} instead of renaming it.`,
+        blastRadius: stateful
+          ? "The existing resource and its data are deleted and an empty one is created in its place."
+          : "Downtime between destroy and create; anything referencing it gets a new ID.",
+        suggestion: `Add a \`moved\` block with \`from = ${move.movedFrom}\` and \`to = ${move.movedTo}\`, then re-run the plan: it should show no destroy.`,
+      }),
+    ];
+  }
 
   if (kind === "delete") {
     return [

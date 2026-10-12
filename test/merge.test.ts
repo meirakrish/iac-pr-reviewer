@@ -3,7 +3,7 @@ import { mergeReview, type MergeInput } from "../src/report/merge.js";
 import type { Finding, LlmFinding, LlmReview } from "../src/schema.js";
 import type { ChangeKind } from "../src/plan/types.js";
 
-const stats = { create: 1, update: 0, delete: 1, replace: 0 };
+const stats = { create: 1, update: 0, delete: 1, replace: 0, moved: 0 };
 const llmMeta = { provider: "test", model: "test", ok: true, error: null };
 
 const pre: Finding = {
@@ -45,6 +45,12 @@ describe("mergeReview", () => {
   it("keeps the rule's explanation when the LLM's text is just a severity word", () => {
     const r = merge([pre], { riskLevel: "critical", summary: "s", findings: [llmFinding({ blastRadius: "High", suggestion: "Medium" })] });
     expect(r.findings[0]).toMatchObject({ source: "both", blastRadius: pre.blastRadius, suggestion: pre.suggestion });
+  });
+
+  it("never replaces an exact computed fix with the LLM's suggestion", () => {
+    const moved: Finding = { ...pre, ruleId: "missing-moved-block", suggestion: "Add a `moved` block with `from = module.a` and `to = module.b`." };
+    const r = merge([moved], { riskLevel: "critical", summary: "s", findings: [llmFinding({ suggestion: "Enable backups and deletion protection on the database." })] });
+    expect(r.findings[0]).toMatchObject({ source: "both", suggestion: moved.suggestion, blastRadius: "Orders API loses its database." });
   });
 
   it("keeps precheck findings the LLM did not mention", () => {

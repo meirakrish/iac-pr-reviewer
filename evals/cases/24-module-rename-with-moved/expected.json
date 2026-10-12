@@ -1,0 +1,5 @@
+{
+  "description": "Same refactor as case 23, but with moved blocks: resources are renamed in place, nothing is destroyed.",
+  "risk": { "min": "low", "max": "low" },
+  "findings": []
+}
