@@ -301,6 +301,8 @@ npm run eval -- --case 09
 
 The first compares a different model, the second uses a hosted provider (needs `ANTHROPIC_API_KEY`), and the third runs a single case. Full results are saved to `evals/results/` (git-ignored).
 
+To compare several local models at once (download, GPU-fit check, two cold eval runs each, and a summary table), use `./scripts/compare-models.sh`. [docs/testing-local-models.md](docs/testing-local-models.md) explains how to run it and how to judge the results.
+
 ### Adding an eval case
 
 1. Create `evals/cases/26-my-case/main.tf` with the resources you want to test. Don't include provider blocks: the generator adds the ones you need (from `evals/providers/`) based on the resource types you use. Local modules go in a `modules/` folder inside the case.
