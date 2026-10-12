@@ -8,9 +8,13 @@ export async function getChatModel(cfg: LlmConfig): Promise<BaseChatModel> {
   switch (cfg.provider) {
     case "ollama": {
       const { ChatOllama } = await import("@langchain/ollama");
+      const baseUrl = cfg.baseUrl ?? "http://localhost:11434";
       return new ChatOllama({
         model: cfg.model,
-        baseUrl: cfg.baseUrl ?? "http://localhost:11434",
+        baseUrl,
+        // Thinking models (Qwen3, ...) would reason at length before the JSON answer: slower, and it eats into
+        // the output cap. Turn it off, but only for models that support it; others reject the option.
+        think: (await ollamaCapabilities(baseUrl, cfg.model)).includes("thinking") ? false : undefined,
         temperature: 0,
         // Ollama's default context (2-4k tokens) silently truncates plans; much larger
         // contexts reserve KV-cache VRAM and can OOM consumer GPUs.
@@ -27,5 +31,27 @@ export async function getChatModel(cfg: LlmConfig): Promise<BaseChatModel> {
       const { ChatOpenAI } = await import("@langchain/openai");
       return new ChatOpenAI({ model: cfg.model, maxRetries: 2 });
     }
+  }
+}
+
+/** Ask Ollama what a model supports (e.g. "completion", "tools", "thinking"). Empty if it can't be determined. */
+export async function ollamaCapabilities(
+  baseUrl: string,
+  model: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<string[]> {
+  try {
+    const res = await fetchImpl(`${baseUrl.replace(/\/$/, "")}/api/show`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return [];
+    const body = (await res.json()) as { capabilities?: unknown };
+    return Array.isArray(body.capabilities) ? body.capabilities.filter((c): c is string => typeof c === "string") : [];
+  } catch {
+    // Server unreachable: the review call itself will report the real error.
+    return [];
   }
 }

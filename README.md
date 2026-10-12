@@ -65,7 +65,7 @@ flowchart TD
 To set up the local model:
 
 ```bash
-ollama pull qwen2.5:7b-instruct
+ollama pull qwen3.5:9b
 ```
 
 If you don't have Terraform, see [HashiCorp's install guide](https://developer.hashicorp.com/terraform/install). On Ubuntu you can run `./scripts/install-terraform.sh`.
@@ -158,13 +158,15 @@ The provider is picked automatically:
 
 1. If `ANTHROPIC_API_KEY` is set, it uses **Anthropic** (`claude-sonnet-5-5`).
 2. Otherwise, if `OPENAI_API_KEY` is set, it uses **OpenAI** (`gpt-5-mini`).
-3. Otherwise it uses local **Ollama** (`qwen2.5:7b-instruct`).
+3. Otherwise it uses local **Ollama** (`qwen3.5:9b`, about 6 GB of GPU memory).
 
 To force a choice, use `--provider` and `--model` (or `IAC_REVIEW_PROVIDER` / `IAC_REVIEW_MODEL`):
 
 ```bash
-iac-review --plan plan.json --provider ollama --model qwen2.5-coder:7b
+iac-review --plan plan.json --provider ollama --model qwen2.5:7b-instruct
 ```
+
+`qwen2.5:7b-instruct` is a lighter alternative (about 5 GB, ~35% faster) that misses some risks only an LLM can catch. Models that can "think" before answering, such as `qwen3.5`, run with thinking turned off: it's slower and doesn't help with this structured output.
 
 If the LLM is unavailable (Ollama not running, API error, timeout), the review **still completes** with the rule-based results, and the report notes that the AI review was unavailable.
 
@@ -260,19 +262,19 @@ npm run eval
 ```
 
 ```
-✅ 13-azure-public-storage          risk high     (want high-critical)  7.1s
-✅ 23-module-rename-no-moved        risk critical (want critical)  7.6s
-❌ 25-module-nested-public-db       risk critical (want critical)  4.0s
-     under-rated: module.analytics.module.database.aws_db_instance.this/network-exposure (got medium, want ≥high)
+❌ 05-public-s3                     risk critical (want high-critical)  6.1s
+     extra:       aws_s3_bucket.exports/public-storage (critical, llm)
+✅ 13-azure-public-storage          risk high     (want high-critical)  8.1s
+✅ 25-module-nested-public-db       risk critical (want critical)  8.3s
 ...
-                    ollama/qwen2.5:7b-instruct   prechecks only
+                            ollama/qwen3.5:9b   prechecks only
 risk accuracy                             100%    100%
-finding recall                             97%     84%
-finding precision                         100%    100%
-LLM-only recall                            80%      0%
+finding recall                            100%     84%
+finding precision                          91%    100%
+LLM-only recall                           100%      0%
 ```
 
-A failing case prints what went wrong underneath it, e.g. `missed: <resource>/<category>` or `under-rated: <resource> (got medium, want ≥high)`.
+A failing case prints what went wrong underneath it, e.g. `missed: <resource>/<category>`, `under-rated: <resource> (got medium, want ≥high)` or `extra: <resource>/<category>`. An "extra" isn't always wrong: in case 05 above the model correctly flags the bucket itself as public, while the expected findings name the policy and access-block resources. Read the finding before treating it as a false alarm.
 
 | Metric | Meaning |
 |---|---|
@@ -286,7 +288,7 @@ The "prechecks only" column is the rule-based baseline, so you can see how much 
 Useful variations:
 
 ```bash
-npm run eval -- --model qwen2.5-coder:7b
+npm run eval -- --model qwen2.5:7b-instruct
 ```
 
 ```bash
