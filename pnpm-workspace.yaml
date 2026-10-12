@@ -1,5 +1,2 @@
 allowBuilds:
   esbuild: true
-  # llm-kit is installed from GitHub and compiles itself on install. pnpm only allows that for this exact
-  # commit; switch to a llm-kit release tarball to drop this entry.
-  "@meirakrish/llm-kit@https://codeload.github.com/meirakrish/llm-kit/tar.gz/ad3e32db31c7f4fda83d940ef229c1a07d6b7661": true
