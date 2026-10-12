@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { toJsonSchema } from "@langchain/core/utils/json_schema";
 
 export const Severity = z.enum(["low", "medium", "high", "critical"]);
 export type Severity = z.infer<typeof Severity>;
@@ -43,6 +44,24 @@ export const LlmReviewSchema = z.object({
   findings: z.array(LlmFinding),
 });
 export type LlmReview = z.infer<typeof LlmReviewSchema>;
+
+export const TEXT_LIMITS = { summary: 700, field: 400, resource: 200, findings: 20 };
+
+/**
+ * JSON schema for LlmReviewSchema with length limits on free-text fields. Constrained decoders
+ * (Ollama/llama.cpp grammars) enforce these, which stops small models from writing one string forever.
+ * Not used for hosted providers: OpenAI strict mode does not accept maxLength.
+ */
+export function boundedReviewJsonSchema(): Record<string, any> {
+  // Deep copy: LangChain caches and shares the converted schema object, so it must not be mutated.
+  const js = structuredClone(toJsonSchema(LlmReviewSchema)) as Record<string, any>;
+  js.properties.summary.maxLength = TEXT_LIMITS.summary;
+  const findings = js.properties.findings;
+  findings.maxItems = TEXT_LIMITS.findings;
+  for (const k of ["issue", "blastRadius", "suggestion"]) findings.items.properties[k].maxLength = TEXT_LIMITS.field;
+  findings.items.properties.resource.maxLength = TEXT_LIMITS.resource;
+  return js;
+}
 
 export const FindingSource = z.enum(["precheck", "llm", "both"]);
 

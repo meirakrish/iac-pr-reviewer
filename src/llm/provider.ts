@@ -13,11 +13,13 @@ export async function getChatModel(cfg: LlmConfig): Promise<BaseChatModel> {
         // Ollama's default context (2-4k tokens) silently truncates plans; much larger
         // contexts reserve KV-cache VRAM and can OOM consumer GPUs.
         numCtx: cfg.numCtx,
+        // Small models with JSON-constrained output occasionally emit whitespace forever.
+        numPredict: cfg.maxOutputTokens,
       });
     }
     case "anthropic": {
       const { ChatAnthropic } = await import("@langchain/anthropic");
-      return new ChatAnthropic({ model: cfg.model, temperature: 0, maxTokens: 8192, maxRetries: 2 });
+      return new ChatAnthropic({ model: cfg.model, temperature: 0, maxTokens: cfg.maxOutputTokens, maxRetries: 2 });
     }
     case "openai": {
       const { ChatOpenAI } = await import("@langchain/openai");

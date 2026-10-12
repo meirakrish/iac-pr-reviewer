@@ -15,6 +15,8 @@ export interface LlmConfig {
   baseUrl?: string;
   /** Ollama context window in tokens. */
   numCtx: number;
+  /** Cap on generated tokens; stops runaway generations (a full review needs well under 2k). */
+  maxOutputTokens: number;
   timeoutMs: number;
 }
 
@@ -38,6 +40,7 @@ export interface ConfigInput {
   maxPlanChars?: string | number;
   timeoutMs?: string | number;
   numCtx?: string | number;
+  maxOutputTokens?: string | number;
 }
 
 type Env = Record<string, string | undefined>;
@@ -69,6 +72,7 @@ function resolveLlm(input: ConfigInput, env: Env): LlmConfig {
     model: input.model ?? env.IAC_REVIEW_MODEL ?? DEFAULT_MODELS[p],
     baseUrl: input.baseUrl ?? env.OLLAMA_HOST ?? undefined,
     numCtx: Number(input.numCtx ?? env.IAC_REVIEW_NUM_CTX ?? 16_384),
+    maxOutputTokens: Number(input.maxOutputTokens ?? env.IAC_REVIEW_MAX_OUTPUT_TOKENS ?? 4096),
     timeoutMs: Number(input.timeoutMs ?? env.IAC_REVIEW_TIMEOUT_MS ?? 180_000),
   };
 }

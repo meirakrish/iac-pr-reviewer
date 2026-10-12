@@ -1,11 +1,4 @@
-# Shared by every eval case. Mock credentials + skips let `terraform plan -refresh=false`
-# run fully offline: no AWS account needed.
-terraform {
-  required_providers {
-    aws = { source = "hashicorp/aws", version = "~> 6.0" }
-  }
-}
-
+# Mock credentials + skips let `terraform plan -refresh=false` run fully offline.
 provider "aws" {
   region                      = "us-east-1"
   access_key                  = "mock"

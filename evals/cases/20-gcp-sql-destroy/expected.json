@@ -1,0 +1,7 @@
+{
+  "description": "Production Cloud SQL instance removed from config (destroy).",
+  "risk": { "min": "critical", "max": "critical" },
+  "findings": [
+    { "resource": "google_sql_database_instance.billing", "category": "data-loss", "minSeverity": "critical" }
+  ]
+}

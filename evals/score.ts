@@ -9,6 +9,8 @@ export const ExpectedFinding = z.object({
   minSeverity: Severity,
   /** Prechecks cannot catch this; only the LLM can. */
   llmOnly: z.boolean().default(false),
+  /** A valid finding that isn't required: not counted toward recall, but not penalized as "extra" either. */
+  optional: z.boolean().default(false),
 });
 
 export const Expected = z.object({
@@ -37,7 +39,7 @@ export function scoreCase(result: ReviewResult, expected: Expected): CaseScore {
   const r = SEVERITY_ORDER[result.riskLevel];
   score.riskOk = r >= SEVERITY_ORDER[expected.risk.min] && r <= SEVERITY_ORDER[expected.risk.max];
 
-  for (const exp of expected.findings) {
+  for (const exp of expected.findings.filter((e) => !e.optional)) {
     const label = `${exp.resource}${exp.category ? `/${exp.category}` : ""}`;
     if (exp.llmOnly) score.llmOnlyTotal++;
     const candidates = result.findings.filter(

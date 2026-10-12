@@ -1,0 +1,7 @@
+{
+  "description": "VPC firewall opens SSH to 0.0.0.0/0.",
+  "risk": { "min": "critical", "max": "critical" },
+  "findings": [
+    { "resource": "google_compute_firewall.allow_ssh", "category": "network-exposure", "minSeverity": "critical" }
+  ]
+}

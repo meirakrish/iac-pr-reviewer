@@ -4,7 +4,7 @@ import { runPrechecks } from "../src/prechecks/index.js";
 import { encryptionCheck } from "../src/prechecks/encryption.js";
 import { actionMatches, iamCheck } from "../src/prechecks/iam.js";
 import { ingressCheck } from "../src/prechecks/ingress.js";
-import { s3PublicCheck } from "../src/prechecks/s3-public.js";
+import { publicStorageCheck } from "../src/prechecks/public-storage.js";
 import { tagsCheck } from "../src/prechecks/tags.js";
 import { destroyCheck } from "../src/prechecks/destroy.js";
 import { evalPlan, rc } from "./helpers.js";
@@ -22,6 +22,14 @@ describe("prechecks on real plans", () => {
     ["08-ec2-ami-replace", ["high:resource-replace:aws_instance.api"]],
     ["09-iam-passrole-escalation", ["high:iam-privilege-escalation:aws_iam_policy.deployer"]],
     ["11-safe-alb-https", ["low:open-ingress:aws_security_group.alb"]],
+    ["12-azure-open-rdp", ["critical:open-ingress:azurerm_network_security_group.jumpbox"]],
+    ["14-azure-owner-subscription", ["critical:azure-privileged-role:azurerm_role_assignment.ci_owner"]],
+    ["15-azure-sql-open-firewall", ["critical:open-ingress:azurerm_mssql_firewall_rule.everyone"]],
+    ["16-azure-safe-private-vm", []],
+    ["17-gcp-public-bucket", ["high:gcs-public-iam:google_storage_bucket_iam_member.public_read"]],
+    ["18-gcp-open-ssh", ["critical:open-ingress:google_compute_firewall.allow_ssh"]],
+    ["20-gcp-sql-destroy", ["critical:resource-destroy:google_sql_database_instance.billing"]],
+    ["22-gcp-safe-iap-ssh", []],
   ])("%s", (name, expected) => {
     const findings = runPrechecks(changedResources(evalPlan(name)), ctx);
     expect(findings.map((f) => `${f.severity}:${f.ruleId}:${f.resource}`)).toEqual(expected);
@@ -122,15 +130,15 @@ describe("ingressCheck", () => {
   });
 });
 
-describe("s3PublicCheck", () => {
+describe("publicStorageCheck", () => {
   it("flags public-read-write ACLs as critical", () => {
-    const [f] = s3PublicCheck(rc("aws_s3_bucket_acl", { acl: "public-read-write" }), ctx);
+    const [f] = publicStorageCheck(rc("aws_s3_bucket_acl", { acl: "public-read-write" }), ctx);
     expect(f!.severity).toBe("critical");
   });
 
   it("does not flag bucket policies with a Condition", () => {
     const p = policy({ Effect: "Allow", Principal: "*", Action: "s3:GetObject", Resource: "*", Condition: { StringEquals: { "aws:SourceArn": "x" } } });
-    expect(s3PublicCheck(rc("aws_s3_bucket_policy", { policy: p }), ctx)).toEqual([]);
+    expect(publicStorageCheck(rc("aws_s3_bucket_policy", { policy: p }), ctx)).toEqual([]);
   });
 });
 
@@ -159,5 +167,94 @@ describe("tagsCheck", () => {
 
   it("ignores resources without a tags attribute", () => {
     expect(tagsCheck(rc("aws_iam_role_policy_attachment", { role: "x" }), ctx)).toEqual([]);
+  });
+});
+
+describe("Azure rules", () => {
+  const nsgRule = (o: object) => ({ direction: "Inbound", access: "Allow", protocol: "Tcp", source_address_prefix: "*", destination_port_range: "22", ...o });
+
+  it("treats NSG wildcard ports and port lists correctly", () => {
+    expect(ingressCheck(rc("azurerm_network_security_rule", nsgRule({ destination_port_range: "*" })), ctx)[0]!.issue).toContain("all ports");
+    const [f] = ingressCheck(rc("azurerm_network_security_rule", nsgRule({ destination_port_range: null, destination_port_ranges: ["443", "8000-8100"] })), ctx);
+    expect(f!.severity).toBe("high");
+  });
+
+  it("ignores Deny and Outbound NSG rules", () => {
+    expect(ingressCheck(rc("azurerm_network_security_rule", nsgRule({ access: "Deny" })), ctx)).toEqual([]);
+    expect(ingressCheck(rc("azurerm_network_security_rule", nsgRule({ direction: "Outbound" })), ctx)).toEqual([]);
+  });
+
+  it("rates the 'Allow Azure services' firewall rule as medium", () => {
+    const [f] = ingressCheck(rc("azurerm_postgresql_flexible_server_firewall_rule", { start_ip_address: "0.0.0.0", end_ip_address: "0.0.0.0" }), ctx);
+    expect(f!.severity).toBe("medium");
+  });
+
+  it("resolves built-in role GUIDs and scales severity with scope", () => {
+    const owner = "/subscriptions/x/providers/Microsoft.Authorization/roleDefinitions/8e3af657-a8ff-443c-a75c-2fe8c4bcb635";
+    expect(iamCheck(rc("azurerm_role_assignment", { role_definition_id: owner, scope: "/subscriptions/x/resourceGroups/rg" }), ctx)[0]!.severity).toBe("high");
+    expect(iamCheck(rc("azurerm_role_assignment", { role_definition_name: "User Access Administrator", scope: "/providers/Microsoft.Management/managementGroups/root" }), ctx)[0]!.severity).toBe("critical");
+    expect(iamCheck(rc("azurerm_role_assignment", { role_definition_name: "Contributor", scope: "/subscriptions/x/resourceGroups/rg" }), ctx)).toEqual([]);
+    expect(iamCheck(rc("azurerm_role_assignment", { role_definition_name: "Reader", scope: "/subscriptions/x" }), ctx)).toEqual([]);
+  });
+
+  it("flags wildcard custom roles unless Microsoft.Authorization is excluded", () => {
+    const role = (not_actions: string[]) => rc("azurerm_role_definition", { permissions: [{ actions: ["*"], not_actions }] });
+    expect(iamCheck(role([]), ctx)[0]!.severity).toBe("critical");
+    expect(iamCheck(role(["Microsoft.Authorization/*/Write"]), ctx)[0]!.severity).toBe("high");
+  });
+
+  it("flags weak TLS and plaintext on storage and Redis", () => {
+    expect(encryptionCheck(rc("azurerm_storage_account", { https_traffic_only_enabled: true, min_tls_version: "TLS1_1" }), ctx)[0]!.severity).toBe("medium");
+    expect(encryptionCheck(rc("azurerm_storage_account", { https_traffic_only_enabled: true, min_tls_version: "TLS1_2" }), ctx)).toEqual([]);
+    expect(encryptionCheck(rc("azurerm_redis_cache", { non_ssl_port_enabled: true }), ctx)).toHaveLength(1);
+  });
+
+  it("only flags blob/container access on storage containers", () => {
+    expect(publicStorageCheck(rc("azurerm_storage_container", { container_access_type: "private" }), ctx)).toEqual([]);
+    expect(publicStorageCheck(rc("azurerm_storage_container", { container_access_type: "blob" }), ctx)[0]!.severity).toBe("high");
+  });
+});
+
+describe("GCP rules", () => {
+  const fw = (o: object) => rc("google_compute_firewall", { direction: "INGRESS", source_ranges: ["0.0.0.0/0"], allow: [{ protocol: "tcp", ports: ["22"] }], ...o });
+
+  it("treats a firewall allow without ports, or protocol all, as all traffic", () => {
+    expect(ingressCheck(fw({ allow: [{ protocol: "tcp", ports: [] }] }), ctx)[0]!.issue).toContain("all ports");
+    expect(ingressCheck(fw({ allow: [{ protocol: "all" }] }), ctx)[0]!.severity).toBe("critical");
+  });
+
+  it("ignores disabled and egress firewalls", () => {
+    expect(ingressCheck(fw({ disabled: true }), ctx)).toEqual([]);
+    expect(ingressCheck(fw({ direction: "EGRESS" }), ctx)).toEqual([]);
+  });
+
+  it("does not flag Cloud SQL with 0.0.0.0/0 when public IP is disabled", () => {
+    const settings = [{ ip_configuration: [{ ipv4_enabled: false, authorized_networks: [{ value: "0.0.0.0/0" }] }] }];
+    expect(ingressCheck(rc("google_sql_database_instance", { settings }), ctx)).toEqual([]);
+  });
+
+  it("rates public write access on buckets as critical and allAuthenticatedUsers as public", () => {
+    expect(publicStorageCheck(rc("google_storage_bucket_iam_binding", { role: "roles/storage.objectAdmin", members: ["allUsers"] }), ctx)[0]!.severity).toBe("critical");
+    const [f] = publicStorageCheck(rc("google_storage_bucket_iam_member", { role: "roles/storage.objectViewer", member: "allAuthenticatedUsers" }), ctx);
+    expect(f!.issue).toContain("any Google account");
+  });
+
+  it("grades project/folder/org grants by role", () => {
+    const grant = (type: string, role: string, member = "user:a@example.com") => iamCheck(rc(type, { role, member }), ctx);
+    expect(grant("google_project_iam_member", "roles/editor")[0]!.severity).toBe("high");
+    expect(grant("google_organization_iam_member", "roles/iam.serviceAccountTokenCreator")[0]!.severity).toBe("high");
+    expect(grant("google_project_iam_member", "roles/viewer", "allUsers")[0]!.severity).toBe("critical");
+    expect(grant("google_project_iam_member", "roles/storage.objectViewer")).toEqual([]);
+  });
+
+  it("flags custom roles with setIamPolicy but not actAs without compute", () => {
+    expect(iamCheck(rc("google_project_iam_custom_role", { permissions: ["resourcemanager.projects.setIamPolicy"] }), ctx)).toHaveLength(1);
+    expect(iamCheck(rc("google_project_iam_custom_role", { permissions: ["iam.serviceAccounts.actAs", "storage.objects.get"] }), ctx)).toEqual([]);
+  });
+
+  it("checks labels (not network tags) on GCP resources", () => {
+    expect(tagsCheck(rc("google_compute_instance", { tags: ["ssh"], labels: { team: "a" }, terraform_labels: { team: "a" } }), ctx)).toEqual([]);
+    expect(tagsCheck(rc("google_compute_instance", { tags: ["ssh"], labels: null, terraform_labels: {} }), ctx)[0]!.issue).toContain("no labels");
+    expect(tagsCheck(rc("google_storage_bucket", { labels: { team: "a" }, terraform_labels: { team: "a" } }), { requiredTags: ["Team"] })).toEqual([]);
   });
 });

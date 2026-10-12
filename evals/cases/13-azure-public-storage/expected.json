@@ -1,0 +1,24 @@
+{
+  "description": "Customer-exports container is anonymously listable/readable (enabled by the account allowing public containers); the account also allows plain HTTP and TLS 1.0.",
+  "risk": {
+    "min": "high",
+    "max": "critical"
+  },
+  "findings": [
+    {
+      "resource": "azurerm_storage_container.exports",
+      "category": "public-storage",
+      "minSeverity": "high"
+    },
+    {
+      "resource": "azurerm_storage_account.reports",
+      "category": "encryption",
+      "minSeverity": "high"
+    },
+    {
+      "resource": "azurerm_storage_account.reports",
+      "category": "public-storage",
+      "minSeverity": "low"
+    }
+  ]
+}
