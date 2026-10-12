@@ -49,8 +49,24 @@ Measured on the same 25 cases, two cold runs each, 100% on the GPU:
 | **`qwen3.5:9b`** (default) | 6.1 GB | 100% | 100% | 91%\* | 100% | 05, 17, 23\* | 6.9 s |
 | `qwen2.5:7b-instruct` | 5.6 GB | 100% | 97% | 100% | 80% | 25 | 4.5 s |
 | `qwen2.5-coder:7b` | 5.6 GB | 96% | 94% | 91% | 60% | 16, 21, 25 | 4.1 s |
+| `qwen3.5:4b` | 3.6 GB | 96% | 100% | 89% | 100% | 05, 13, 16, 25 | 4.7 s |
+| `qwen3:8b` | 7.5 GB | 96% | 97% | 88% | 80% | 11, 16, 17, 21, 25 | 4.7 s |
+| `ministral-3:8b` | 7.4 GB | 90% | 100% | 69% | 100% | 03, 08, 11, 13, 15, 16, 17, 20, 21, 22, 25 | 11.3 s |
+| `gemma4:e4b` | ~5 GB† | 92% | 100% | 91% | 100% | 05, 11, 16 | 3.2 s |
+| `granite4:tiny-h` | 4.6 GB | 88% | 94% | 64% | 60% | 01, 02, 03, 05, 07, 11, 15, 16, 17, 20, 21, 22, 23, 25 | 3.2 s |
 
 \* `qwen3.5:9b`'s three "extra" findings are real issues reported on a neighbouring resource (for example, the S3 bucket a policy makes public), not invented ones. In practice its precision is about 100%.
+
+† `ollama ps` reports 330 MB for `gemma4:e4b`; `nvidia-smi` shows about 5 GB in use. Gemma 4's "e" models also keep some weights in system RAM (~4 GB, with heavy CPU use), so "100% GPU" isn't entirely true for it.
+
+Ruled out on 2026-10-12 (all five fit 100% on the GPU, but each raised false alarms on safe cases):
+
+- **All five** flag the storage account on the safe case 16 because `public_network_access_enabled = true` (the provider default; nothing is publicly readable).
+- `qwen3.5:4b`: invented risks on 05 (reads `force_destroy = false`, the protective setting, as a risk) and 25 (overstates `delete_automated_backups`).
+- `qwen3:8b`: false alarm on the public ALB in case 11; invented risks on 17 ("uniform bucket-level access allows public access") and 25 (reads `skip_final_snapshot = false` as "no final snapshot", CRITICAL). Misses 21's LLM-only risk.
+- `ministral-3:8b`: false alarms on safe cases 01, 11, 16 (CRITICAL) and 22; wrong facts on 15 and 17; case 05 aborts with "token repeat limit reached" in both runs; slowest model tested.
+- `gemma4:e4b`: closest candidate (fast, no invented risks on risky cases), but escalates safe cases 11 and 16 to HIGH in both runs.
+- `granite4:tiny-h`: invented risks on many cases (a public bucket on 20 where `public_access_prevention = "enforced"`, "public access" on 23's VPC-only security group), misses 25's network exposure.
 
 Ruled out earlier: models above ~9 GB (`qwen3:14b`, `qwen2.5:14b-instruct`, `gemma4:12b`) don't fit fully on this GPU, and partial CPU offload was too slow to be worth it.
 
