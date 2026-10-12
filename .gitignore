@@ -1,7 +1,13 @@
 node_modules/
 dist/
-*.tfplan
+coverage/
 .env
+*.log
+# Git worktrees of Claude Code background agents
+.claude/worktrees/
+
+# Project
+*.tfplan
 evals/results/
 .scratch/
 examples/localstack/.work/

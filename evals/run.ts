@@ -1,10 +1,10 @@
 /**
  * Run the full review pipeline over every eval case and score it against expected.json.
  *
- *   npm run eval                        # default provider (env / Ollama)
- *   npm run eval -- --model llama3.1:8b
- *   npm run eval -- --provider anthropic --case 09
- *   npm run eval -- --no-llm            # prechecks-only baseline
+ *   pnpm eval                        # default provider (env / Ollama)
+ *   pnpm eval --model llama3.1:8b
+ *   pnpm eval --provider anthropic --case 09
+ *   pnpm eval --no-llm            # prechecks-only baseline
  *
  * Results are written to evals/results/<timestamp>.json.
  */

@@ -6,7 +6,7 @@
 #   REMOVE_AFTER=1 ./scripts/compare-models.sh gemma4:e4b       # delete each model after testing it
 #
 # For each model: pull it (with retries), check it loads 100% on the GPU (models that would spill to the
-# CPU are skipped), run `npm run eval` RUNS times from a cold start, and collect the scores.
+# CPU are skipped), run `pnpm eval` RUNS times from a cold start, and collect the scores.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -25,7 +25,7 @@ curl -s localhost:11434/api/version >/dev/null || {
   echo "Ollama isn't running on localhost:11434" >&2
   exit 1
 }
-[[ -f dist/cli.js ]] || npm run build >/dev/null
+[[ -f dist/cli.js ]] || pnpm build >/dev/null
 
 for model in "$@"; do
   log "$model"
@@ -73,7 +73,7 @@ for model in "$@"; do
   for run in $(seq "$RUNS"); do
     ollama stop "$model" >/dev/null 2>&1
     echo "   eval run $run/$RUNS (cold start)..."
-    result=$(LLM_NUM_CTX=$NUM_CTX npm run eval -- --model "$model" 2>&1 | grep -oE 'results: .*' | cut -d' ' -f2)
+    result=$(LLM_NUM_CTX=$NUM_CTX pnpm eval --model "$model" 2>&1 | grep -oE 'results: .*' | cut -d' ' -f2)
     [[ -n "$result" ]] && files+=("$result")
   done
   [[ ${#files[@]} -gt 0 ]] || {

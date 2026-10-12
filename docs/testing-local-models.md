@@ -17,7 +17,7 @@ Paste this into a new session started in this repo:
    ```
 3. **Build the project** (the script uses `dist/`):
    ```bash
-   npm install && npm run build
+   pnpm install && pnpm build
    ```
 
 ## Run the comparison
@@ -30,7 +30,7 @@ For each model, the script:
 
 1. downloads it, retrying if Ollama's registry returns a temporary error (this happened once with `qwen3.5:9b`)
 2. loads it once and checks `ollama ps`. Models that don't fit **100% on the GPU are skipped**, because running partly on the CPU is several times slower and isn't worth it
-3. runs `npm run eval` twice, each time from a cold start (the first request after loading is where small models misbehave most)
+3. runs `pnpm eval` twice, each time from a cold start (the first request after loading is where small models misbehave most)
 4. prints a markdown table and saves it to `evals/results/compare-<timestamp>.md`
 
 It takes about 5–8 minutes per model. Options:
