@@ -33,7 +33,11 @@ export async function reviewPlan(plan: TerraformPlan, config: ReviewConfig, opts
       const trimmed = trimPlan(changes, config.maxPlanChars);
       if (trimmed.omitted.length) log(`plan too large: ${trimmed.omitted.length} resources omitted from the LLM prompt`);
       log(`calling ${config.llm.provider}/${config.llm.model}...`);
-      llm = await llmReview(model, { stats, prechecks, plan: trimmed }, { timeoutMs: config.llm.timeoutMs });
+      llm = await llmReview(model, { stats, prechecks, plan: trimmed }, {
+        timeoutMs: config.llm.timeoutMs,
+        log,
+        boundedOutput: config.llm.provider === "ollama",
+      });
       llmMeta.ok = true;
     } catch (err) {
       llmMeta.error = describeError(err);

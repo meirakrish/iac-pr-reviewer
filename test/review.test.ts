@@ -3,15 +3,18 @@ import type { BaseChatModel } from "@langchain/core/language_models/chat_models"
 import { resolveConfig } from "../src/config.js";
 import { exceedsThreshold, reviewPlan } from "../src/review.js";
 import { renderMarkdown, COMMENT_MARKER } from "../src/report/markdown.js";
-import type { LlmReview } from "../src/schema.js";
+import { boundedReviewJsonSchema, LlmReviewSchema, type LlmReview } from "../src/schema.js";
+import { toJsonSchema } from "@langchain/core/utils/json_schema";
+import { trimToSentence } from "../src/llm/review.js";
 import { evalPlan } from "./helpers.js";
 
-/** Minimal stand-in for a LangChain chat model: withStructuredOutput(...).invoke() resolves or throws. */
-function fakeModel(result: LlmReview | Error): BaseChatModel & { calls: number } {
+/** Minimal stand-in for a LangChain chat model: withStructuredOutput(...).invoke() resolves or throws, one result per call. */
+function fakeModel(...results: (LlmReview | Error)[]): BaseChatModel & { calls: number } {
   const model = {
     calls: 0,
     withStructuredOutput: () => ({
       invoke: async () => {
+        const result = results[Math.min(model.calls, results.length - 1)]!;
         model.calls++;
         if (result instanceof Error) throw result;
         return result;
@@ -42,6 +45,21 @@ describe("reviewPlan", () => {
     expect(r.riskLevel).toBe("critical");
     expect(r.llm).toMatchObject({ ok: false, error: expect.stringContaining("Ollama") });
     expect(renderMarkdown(r)).toContain("AI review unavailable");
+  });
+
+  it("retries once when the model returns unusable output", async () => {
+    const good: LlmReview = { riskLevel: "critical", summary: "SSH is open.", findings: [] };
+    const model = fakeModel(new Error("Failed to parse. Text: \"{ \\n\\n\\n\""), good);
+    const r = await reviewPlan(evalPlan("04-open-ssh"), config, { model });
+    expect(model.calls).toBe(2);
+    expect(r.llm.ok).toBe(true);
+    expect(r.summary).toBe("SSH is open.");
+  });
+
+  it("does not retry connection errors", async () => {
+    const model = fakeModel(new Error("fetch failed", { cause: { code: "ECONNREFUSED" } }));
+    await reviewPlan(evalPlan("04-open-ssh"), config, { model });
+    expect(model.calls).toBe(1);
   });
 
   it("skips the LLM entirely with --no-llm", async () => {
@@ -81,5 +99,26 @@ describe("resolveConfig", () => {
   it("rejects invalid values", () => {
     expect(() => resolveConfig({ failOn: "severe" }, {})).toThrow(/fail-on/);
     expect(() => resolveConfig({ provider: "gemini" }, {})).toThrow(/provider/);
+  });
+});
+
+describe("trimToSentence", () => {
+  it("trims text cut off at the limit back to the last full sentence", () => {
+    const cut = "First sentence. Second sentence is fine. Third one got cut off by the length lim";
+    expect(trimToSentence(cut, cut.length)).toBe("First sentence. Second sentence is fine.");
+  });
+
+  it("leaves short or complete text alone", () => {
+    expect(trimToSentence("Use TLS 1.2", 400)).toBe("Use TLS 1.2");
+    expect(trimToSentence("Done.", 5)).toBe("Done.");
+  });
+});
+
+describe("boundedReviewJsonSchema", () => {
+  it("adds length limits without mutating the schema shared with hosted providers", () => {
+    const bounded = boundedReviewJsonSchema();
+    expect(bounded.properties.summary.maxLength).toBe(700);
+    expect(bounded.properties.findings.items.properties.issue.maxLength).toBe(400);
+    expect((toJsonSchema(LlmReviewSchema) as any).properties.summary.maxLength).toBeUndefined();
   });
 });

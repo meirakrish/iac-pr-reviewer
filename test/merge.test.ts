@@ -42,6 +42,11 @@ describe("mergeReview", () => {
     expect(r.findings[0]).toMatchObject({ severity: "critical", source: "both", issue: pre.issue, blastRadius: "Orders API loses its database." });
   });
 
+  it("keeps the rule's explanation when the LLM's text is just a severity word", () => {
+    const r = merge([pre], { riskLevel: "critical", summary: "s", findings: [llmFinding({ blastRadius: "High", suggestion: "Medium" })] });
+    expect(r.findings[0]).toMatchObject({ source: "both", blastRadius: pre.blastRadius, suggestion: pre.suggestion });
+  });
+
   it("keeps precheck findings the LLM did not mention", () => {
     const r = merge([pre], { riskLevel: "critical", summary: "s", findings: [] });
     expect(r.findings[0]!.source).toBe("precheck");

@@ -3,3 +3,4 @@ dist/
 *.tfplan
 .env
 evals/results/
+.scratch/

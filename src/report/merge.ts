@@ -21,6 +21,11 @@ function plausible(f: LlmFinding, actions: Map<string, ChangeKind>): boolean {
   return true;
 }
 
+/** Small models sometimes put a bare severity word ("High") in free-text fields; don't let that replace a rule's explanation. */
+function substantive(text: string): boolean {
+  return text.trim().split(/\s+/).length >= 4;
+}
+
 /**
  * Combine deterministic and LLM findings.
  * The LLM can add findings and raise the risk level, but never remove or downgrade a precheck finding.
@@ -39,8 +44,8 @@ export function mergeReview({ prechecks, llm, llmMeta, stats, actions }: MergeIn
       source: "both",
       severity: maxSeverity([pre.severity, match.severity]),
       // Keep the deterministic issue text (it is exact), take the LLM's context-aware impact and fix.
-      blastRadius: match.blastRadius || pre.blastRadius,
-      suggestion: match.suggestion || pre.suggestion,
+      blastRadius: substantive(match.blastRadius) ? match.blastRadius : pre.blastRadius,
+      suggestion: substantive(match.suggestion) ? match.suggestion : pre.suggestion,
     };
   });
 
