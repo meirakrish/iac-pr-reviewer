@@ -3,7 +3,7 @@ import { Severity } from "./schema.js";
 export type Provider = "ollama" | "anthropic" | "openai";
 
 export const DEFAULT_MODELS: Record<Provider, string> = {
-  ollama: "qwen2.5:7b-instruct",
+  ollama: "qwen3.5:9b",
   anthropic: "claude-sonnet-5-5",
   openai: "gpt-5-mini",
 };
