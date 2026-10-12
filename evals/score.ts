@@ -34,7 +34,15 @@ export interface CaseScore {
 
 export function scoreCase(result: ReviewResult, expected: Expected): CaseScore {
   const used = new Set<Finding>();
-  const score: CaseScore = { riskOk: false, hits: 0, underRated: [], missed: [], extra: [], llmOnlyHits: 0, llmOnlyTotal: 0 };
+  const score: CaseScore = {
+    riskOk: false,
+    hits: 0,
+    underRated: [],
+    missed: [],
+    extra: [],
+    llmOnlyHits: 0,
+    llmOnlyTotal: 0,
+  };
 
   const r = SEVERITY_ORDER[result.riskLevel];
   score.riskOk = r >= SEVERITY_ORDER[expected.risk.min] && r <= SEVERITY_ORDER[expected.risk.max];
@@ -43,7 +51,9 @@ export function scoreCase(result: ReviewResult, expected: Expected): CaseScore {
     const label = `${exp.resource}${exp.category ? `/${exp.category}` : ""}`;
     if (exp.llmOnly) score.llmOnlyTotal++;
     const candidates = result.findings.filter(
-      (f) => !used.has(f) && (exp.category ? sameIssue(f, { resource: exp.resource, category: exp.category }) : f.resource === exp.resource),
+      (f) =>
+        !used.has(f) &&
+        (exp.category ? sameIssue(f, { resource: exp.resource, category: exp.category }) : f.resource === exp.resource),
     );
     const hit = candidates.find((f) => SEVERITY_ORDER[f.severity] >= SEVERITY_ORDER[exp.minSeverity]);
     if (hit) {
@@ -60,7 +70,9 @@ export function scoreCase(result: ReviewResult, expected: Expected): CaseScore {
 
   // Several findings on the same expected resource/category group (e.g. LLM restating a precheck) are not "extra".
   const explained = (f: Finding) =>
-    expected.findings.some((e) => (e.category ? sameIssue(f, { resource: e.resource, category: e.category }) : f.resource === e.resource));
+    expected.findings.some((e) =>
+      e.category ? sameIssue(f, { resource: e.resource, category: e.category }) : f.resource === e.resource,
+    );
   score.extra = result.findings
     .filter((f) => !used.has(f) && !explained(f) && SEVERITY_ORDER[f.severity] >= SEVERITY_ORDER.medium)
     .map((f) => `${f.resource}/${f.category} (${f.severity}, ${f.source})`);

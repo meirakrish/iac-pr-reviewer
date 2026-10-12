@@ -17,11 +17,18 @@ export interface ReviewOptions {
 }
 
 /** The full pipeline: prechecks → LLM → merge. Never throws because of the LLM; it degrades to prechecks only. */
-export async function reviewPlan(plan: TerraformPlan, config: ReviewConfig, opts: ReviewOptions = {}): Promise<ReviewResult> {
+export async function reviewPlan(
+  plan: TerraformPlan,
+  config: ReviewConfig,
+  opts: ReviewOptions = {},
+): Promise<ReviewResult> {
   const log = opts.log ?? (() => {});
   const changes = changedResources(plan);
   const stats = changeStats(changes, plan.resource_changes ?? []);
-  const prechecks = runPrechecks(changes, { requiredTags: config.requiredTags, moves: detectMoves(plan.resource_changes ?? []) });
+  const prechecks = runPrechecks(changes, {
+    requiredTags: config.requiredTags,
+    moves: detectMoves(plan.resource_changes ?? []),
+  });
   log(`${changes.length} changed resources, ${prechecks.length} precheck findings`);
 
   let llm: LlmReview | null = null;
@@ -33,13 +40,18 @@ export async function reviewPlan(plan: TerraformPlan, config: ReviewConfig, opts
     try {
       const model = opts.model ?? (await getChatModel(config.llm));
       const trimmed = trimPlan(changes, config.maxPlanChars);
-      if (trimmed.omitted.length) log(`plan too large: ${trimmed.omitted.length} resources omitted from the LLM prompt`);
+      if (trimmed.omitted.length)
+        log(`plan too large: ${trimmed.omitted.length} resources omitted from the LLM prompt`);
       log(`calling ${config.llm.provider}/${config.llm.model}...`);
-      llm = await llmReview(model, { stats, prechecks, plan: trimmed }, {
-        timeoutMs: config.llm.timeoutMs,
-        log,
-        boundedOutput: config.llm.provider === "ollama",
-      });
+      llm = await llmReview(
+        model,
+        { stats, prechecks, plan: trimmed },
+        {
+          timeoutMs: config.llm.timeoutMs,
+          log,
+          boundedOutput: config.llm.provider === "ollama",
+        },
+      );
       llmMeta.ok = true;
     } catch (err) {
       llmMeta.error = describeError(err);
@@ -47,7 +59,13 @@ export async function reviewPlan(plan: TerraformPlan, config: ReviewConfig, opts
     }
   }
 
-  return mergeReview({ prechecks, llm, llmMeta, stats, actions: new Map(changes.map((c) => [c.address, changeKind(c.change.actions)])) });
+  return mergeReview({
+    prechecks,
+    llm,
+    llmMeta,
+    stats,
+    actions: new Map(changes.map((c) => [c.address, changeKind(c.change.actions)])),
+  });
 }
 
 export function exceedsThreshold(result: ReviewResult, failOn: ReviewConfig["failOn"]): boolean {

@@ -1,5 +1,13 @@
 import { maxSeverity, type Severity } from "../schema.js";
-import { after, asArray, finding, isPublicPrincipal, parsePolicy, type PolicyStatement, type Precheck } from "./util.js";
+import {
+  after,
+  asArray,
+  finding,
+  isPublicPrincipal,
+  parsePolicy,
+  type PolicyStatement,
+  type Precheck,
+} from "./util.js";
 
 const POLICY_ATTRS: Record<string, string[]> = {
   aws_iam_policy: ["policy"],
@@ -9,7 +17,9 @@ const POLICY_ATTRS: Record<string, string[]> = {
   aws_iam_role: ["assume_role_policy"],
 };
 
-/** Actions that run compute under a role chosen by the caller; with iam:PassRole on any role, that's an escalation path. */
+/**
+ * Actions that run compute under a role chosen by the caller; with iam:PassRole on any role, that's an escalation path.
+ */
 const PASSROLE_TARGETS = [
   "lambda:CreateFunction",
   "lambda:UpdateFunctionConfiguration",
@@ -48,7 +58,13 @@ const DIRECT_ESCALATION = [
 
 /** IAM action patterns are case-insensitive globs: "*" and "?" wildcards. */
 export function actionMatches(pattern: string, action: string): boolean {
-  const re = new RegExp(`^${pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".")}$`, "i");
+  const re = new RegExp(
+    `^${pattern
+      .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+      .replace(/\*/g, ".*")
+      .replace(/\?/g, ".")}$`,
+    "i",
+  );
   return re.test(action);
 }
 
@@ -72,10 +88,14 @@ function escalationProblems(stmts: PolicyStatement[]): string[] {
   const problems: string[] = [];
   if (grantedActions(stmts, ["iam:PassRole"], true).length) {
     const compute = grantedActions(stmts, PASSROLE_TARGETS, false);
-    if (compute.length) problems.push(`iam:PassRole on any role combined with ${compute.join(", ")} lets the holder run code as any role, including admin roles`);
+    if (compute.length)
+      problems.push(
+        `iam:PassRole on any role combined with ${compute.join(", ")} lets the holder run code as any role, including admin roles`,
+      );
   }
   const direct = grantedActions(stmts, DIRECT_ESCALATION, true);
-  if (direct.length) problems.push(`${direct.join(", ")} on any resource lets the holder grant itself more permissions`);
+  if (direct.length)
+    problems.push(`${direct.join(", ")} on any resource lets the holder grant itself more permissions`);
   return problems;
 }
 
@@ -106,12 +126,24 @@ const awsIamCheck: Precheck = (rc) => {
     } else if (allActions) problems.push({ severity: "high", text: `${label} allows Action "*"` });
     else {
       const svcWildcards = actions.filter((x) => /^[\w-]+:\*$/.test(x));
-      if (svcWildcards.length) problems.push({ severity: allResources ? "high" : "medium", text: `${label} allows service-wide ${svcWildcards.join(", ")}` });
-      else if (allResources) problems.push({ severity: "medium", text: `${label} grants ${actions.join(", ") || "its actions"} on Resource "*"` });
+      if (svcWildcards.length)
+        problems.push({
+          severity: allResources ? "high" : "medium",
+          text: `${label} allows service-wide ${svcWildcards.join(", ")}`,
+        });
+      else if (allResources)
+        problems.push({
+          severity: "medium",
+          text: `${label} grants ${actions.join(", ") || "its actions"} on Resource "*"`,
+        });
     }
-    if (stmt.NotAction) problems.push({ severity: "high", text: `${label} uses Allow + NotAction, which grants everything not listed` });
+    if (stmt.NotAction)
+      problems.push({ severity: "high", text: `${label} uses Allow + NotAction, which grants everything not listed` });
     if (stmt.Principal !== undefined && isPublicPrincipal(stmt.Principal) && !stmt.Condition) {
-      problems.push({ severity: "critical", text: `${label} trusts Principal "*" with no Condition — anyone can assume it` });
+      problems.push({
+        severity: "critical",
+        text: `${label} trusts Principal "*" with no Condition — anyone can assume it`,
+      });
     }
   }
 
@@ -161,7 +193,11 @@ const azureIamCheck: Precheck = (rc) => {
   if (!a) return [];
 
   if (rc.type === "azurerm_role_assignment") {
-    const id = String(a.role_definition_id ?? "").split("/").pop()?.toLowerCase() ?? "";
+    const id =
+      String(a.role_definition_id ?? "")
+        .split("/")
+        .pop()
+        ?.toLowerCase() ?? "";
     const role = typeof a.role_definition_name === "string" ? a.role_definition_name : AZURE_ROLE_IDS[id];
     if (!role) return [];
     const level = azureScopeLevel(a.scope);
@@ -180,7 +216,8 @@ const azureIamCheck: Precheck = (rc) => {
         blastRadius: broad
           ? `The principal gets ${role === "Contributor" ? "write access to every resource" : "full control, including access management,"} across the entire ${level}.`
           : "The principal gets full control of the scoped resources, including who else can access them.",
-        suggestion: "Assign the narrowest built-in role that fits (e.g. a service-specific Contributor role) at the smallest scope; use PIM for standing admin access.",
+        suggestion:
+          "Assign the narrowest built-in role that fits (e.g. a service-specific Contributor role) at the smallest scope; use PIM for standing admin access.",
       }),
     ];
   }
@@ -192,20 +229,30 @@ const azureIamCheck: Precheck = (rc) => {
     const problems: { severity: Severity; text: string }[] = [];
     if (actions.includes("*")) {
       const excludesAuth = notActions.some((n) => /^Microsoft\.Authorization\/\*/i.test(n));
-      problems.push(excludesAuth
-        ? { severity: "high", text: 'actions = ["*"] (Contributor-equivalent)' }
-        : { severity: "critical", text: 'actions = ["*"] without excluding Microsoft.Authorization (Owner-equivalent)' });
+      problems.push(
+        excludesAuth
+          ? { severity: "high", text: 'actions = ["*"] (Contributor-equivalent)' }
+          : {
+              severity: "critical",
+              text: 'actions = ["*"] without excluding Microsoft.Authorization (Owner-equivalent)',
+            },
+      );
     }
-    const authWrite = actions.filter((x) => /^Microsoft\.Authorization\/(\*|roleAssignments\/(\*|write)|roleDefinitions\/(\*|write))/i.test(x));
-    if (authWrite.length) problems.push({ severity: "high", text: `${authWrite.join(", ")} lets holders grant themselves any role` });
+    const authWrite = actions.filter((x) =>
+      /^Microsoft\.Authorization\/(\*|roleAssignments\/(\*|write)|roleDefinitions\/(\*|write))/i.test(x),
+    );
+    if (authWrite.length)
+      problems.push({ severity: "high", text: `${authWrite.join(", ")} lets holders grant themselves any role` });
     if (!problems.length) return [];
     return [
       finding(rc, "azure-custom-role-wildcard", {
         severity: maxSeverity(problems.map((p) => p.severity)),
         category: "iam",
         issue: `Custom role is overly broad: ${problems.map((p) => p.text).join("; ")}.`,
-        blastRadius: "Anyone assigned this role can act far beyond its intended purpose, up to taking over access management.",
-        suggestion: "List the specific resource-provider actions needed and add Microsoft.Authorization/*/Write to not_actions.",
+        blastRadius:
+          "Anyone assigned this role can act far beyond its intended purpose, up to taking over access management.",
+        suggestion:
+          "List the specific resource-provider actions needed and add Microsoft.Authorization/*/Write to not_actions.",
       }),
     ];
   }
@@ -265,10 +312,22 @@ const gcpIamCheck: Precheck = (rc) => {
     const scope = rc.type.split("_")[1];
     const problems: { severity: Severity; text: string }[] = [];
     const publicMembers = members.filter((m) => GCP_PUBLIC_MEMBERS.has(m));
-    if (publicMembers.length) problems.push({ severity: "critical", text: `grants ${role} to ${publicMembers.join(", ")} (anyone on the internet)` });
+    if (publicMembers.length)
+      problems.push({
+        severity: "critical",
+        text: `grants ${role} to ${publicMembers.join(", ")} (anyone on the internet)`,
+      });
     if (role === "roles/owner") problems.push({ severity: "critical", text: `grants roles/owner on the ${scope}` });
-    else if (role === "roles/editor") problems.push({ severity: "high", text: `grants roles/editor (write access to almost every resource) on the ${scope}` });
-    else if (GCP_ESCALATION_ROLES.has(role)) problems.push({ severity: "high", text: `grants ${role} on the ${scope}, which allows granting more access or impersonating service accounts` });
+    else if (role === "roles/editor")
+      problems.push({
+        severity: "high",
+        text: `grants roles/editor (write access to almost every resource) on the ${scope}`,
+      });
+    else if (GCP_ESCALATION_ROLES.has(role))
+      problems.push({
+        severity: "high",
+        text: `grants ${role} on the ${scope}, which allows granting more access or impersonating service accounts`,
+      });
     if (!problems.length) return [];
     return [
       finding(rc, "gcp-privileged-role", {
@@ -276,7 +335,8 @@ const gcpIamCheck: Precheck = (rc) => {
         category: "iam",
         issue: `Overly broad IAM grant: ${problems.map((p) => p.text).join("; ")}.`,
         blastRadius: `The member${members.length === 1 ? "" : "s"} can act far beyond their intended scope across the whole ${scope}, potentially escalating to full control.`,
-        suggestion: "Grant the narrowest predefined role at the smallest resource scope; avoid basic roles (owner/editor) and public members.",
+        suggestion:
+          "Grant the narrowest predefined role at the smallest resource scope; avoid basic roles (owner/editor) and public members.",
       }),
     ];
   }
@@ -288,7 +348,10 @@ const gcpIamCheck: Precheck = (rc) => {
     if (selfGrant.length) problems.push(`${selfGrant.join(", ")} lets holders grant themselves more access`);
     if (perms.includes("iam.serviceAccounts.actAs")) {
       const compute = GCP_ACTAS_TARGETS.filter((p) => perms.includes(p));
-      if (compute.length) problems.push(`iam.serviceAccounts.actAs combined with ${compute.join(", ")} lets holders run code as any service account they can use`);
+      if (compute.length)
+        problems.push(
+          `iam.serviceAccounts.actAs combined with ${compute.join(", ")} lets holders run code as any service account they can use`,
+        );
     }
     if (!problems.length) return [];
     return [
@@ -296,7 +359,8 @@ const gcpIamCheck: Precheck = (rc) => {
         severity: "high",
         category: "iam",
         issue: `Custom role enables privilege escalation: ${problems.join("; ")}.`,
-        blastRadius: "Anyone with this role can escalate to the permissions of more privileged identities in the project.",
+        blastRadius:
+          "Anyone with this role can escalate to the permissions of more privileged identities in the project.",
         suggestion: "Remove the escalation permissions, or restrict actAs via IAM on specific service accounts.",
       }),
     ];
@@ -305,4 +369,8 @@ const gcpIamCheck: Precheck = (rc) => {
   return [];
 };
 
-export const iamCheck: Precheck = (rc, ctx) => [...awsIamCheck(rc, ctx), ...azureIamCheck(rc, ctx), ...gcpIamCheck(rc, ctx)];
+export const iamCheck: Precheck = (rc, ctx) => [
+  ...awsIamCheck(rc, ctx),
+  ...azureIamCheck(rc, ctx),
+  ...gcpIamCheck(rc, ctx),
+];

@@ -2,7 +2,16 @@
   "description": "A risk two module levels deep: a module input makes the nested database publicly accessible and opens Postgres to the internet.",
   "risk": { "min": "critical", "max": "critical" },
   "findings": [
-    { "resource": "module.analytics.module.database.aws_security_group.db", "category": "network-exposure", "minSeverity": "critical" },
-    { "resource": "module.analytics.module.database.aws_db_instance.this", "category": "network-exposure", "minSeverity": "high", "llmOnly": true }
+    {
+      "resource": "module.analytics.module.database.aws_security_group.db",
+      "category": "network-exposure",
+      "minSeverity": "critical"
+    },
+    {
+      "resource": "module.analytics.module.database.aws_db_instance.this",
+      "category": "network-exposure",
+      "minSeverity": "high",
+      "llmOnly": true
+    }
   ]
 }

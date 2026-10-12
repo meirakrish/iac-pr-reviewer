@@ -1,7 +1,9 @@
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import type { LlmConfig } from "../config.js";
 
-/** Build a LangChain chat model for the configured provider. Providers are imported lazily so unused SDKs never load. */
+/**
+ * Build a LangChain chat model for the configured provider. Providers are imported lazily so unused SDKs never load.
+ */
 export async function getChatModel(cfg: LlmConfig): Promise<BaseChatModel> {
   switch (cfg.provider) {
     case "ollama": {
@@ -13,7 +15,7 @@ export async function getChatModel(cfg: LlmConfig): Promise<BaseChatModel> {
         // Ollama's default context (2-4k tokens) silently truncates plans; much larger
         // contexts reserve KV-cache VRAM and can OOM consumer GPUs.
         numCtx: cfg.numCtx,
-        // Small models with JSON-constrained output occasionally emit whitespace forever.
+        // Backstop for runaway generations (small models sometimes write one string forever).
         numPredict: cfg.maxOutputTokens,
       });
     }

@@ -33,12 +33,16 @@ function awsRule(r: Record<string, unknown>, sources: string[]): Rule {
 
 function azureRule(r: Record<string, unknown>): Rule | null {
   if (String(r.direction).toLowerCase() !== "inbound" || String(r.access).toLowerCase() !== "allow") return null;
-  const specs = [r.destination_port_range, ...asArray(r.destination_port_ranges)].filter((p) => p !== null && p !== undefined && p !== "");
+  const specs = [r.destination_port_range, ...asArray(r.destination_port_ranges)].filter(
+    (p) => p !== null && p !== undefined && p !== "",
+  );
   const ranges = specs.map(parsePortSpec);
   return {
     ranges: ranges.filter((x): x is [number, number] => x !== null),
     allTraffic: ranges.includes(null) || specs.length === 0,
-    sources: [r.source_address_prefix, ...asArray(r.source_address_prefixes)].filter((s): s is string => typeof s === "string"),
+    sources: [r.source_address_prefix, ...asArray(r.source_address_prefixes)].filter(
+      (s): s is string => typeof s === "string",
+    ),
   };
 }
 
@@ -50,7 +54,8 @@ function gcpRules(a: Record<string, unknown>): Rule[] {
     const ranges = ports.map(parsePortSpec);
     return {
       ranges: ranges.filter((x): x is [number, number] => x !== null),
-      allTraffic: ALL_PROTOCOLS.has(String(allow.protocol).toLowerCase()) || ports.length === 0 || ranges.includes(null),
+      allTraffic:
+        ALL_PROTOCOLS.has(String(allow.protocol).toLowerCase()) || ports.length === 0 || ranges.includes(null),
       sources,
     };
   });
@@ -59,15 +64,21 @@ function gcpRules(a: Record<string, unknown>): Rule[] {
 function rulesFor(type: string, a: Record<string, unknown>): Rule[] {
   switch (type) {
     case "aws_security_group":
-      return asArray<Record<string, unknown>>(a.ingress).map((r) => awsRule(r, [...asArray<string>(r.cidr_blocks), ...asArray<string>(r.ipv6_cidr_blocks)]));
+      return asArray<Record<string, unknown>>(a.ingress).map((r) =>
+        awsRule(r, [...asArray<string>(r.cidr_blocks), ...asArray<string>(r.ipv6_cidr_blocks)]),
+      );
     case "aws_security_group_rule":
-      return a.type === "ingress" ? [awsRule(a, [...asArray<string>(a.cidr_blocks), ...asArray<string>(a.ipv6_cidr_blocks)])] : [];
+      return a.type === "ingress"
+        ? [awsRule(a, [...asArray<string>(a.cidr_blocks), ...asArray<string>(a.ipv6_cidr_blocks)])]
+        : [];
     case "aws_vpc_security_group_ingress_rule":
       return [awsRule(a, [...asArray<string>(a.cidr_ipv4), ...asArray<string>(a.cidr_ipv6)])];
     case "azurerm_network_security_rule":
       return [azureRule(a)].filter((r): r is Rule => r !== null);
     case "azurerm_network_security_group":
-      return asArray<Record<string, unknown>>(a.security_rule).map(azureRule).filter((r): r is Rule => r !== null);
+      return asArray<Record<string, unknown>>(a.security_rule)
+        .map(azureRule)
+        .filter((r): r is Rule => r !== null);
     case "google_compute_firewall":
       return gcpRules(a);
     default:
@@ -117,7 +128,8 @@ const dbFirewallCheck: Precheck = (rc) => {
         finding(rc, "open-ingress", {
           severity: "medium",
           category: "network-exposure",
-          issue: 'Database firewall rule 0.0.0.0-0.0.0.0 ("Allow Azure services") admits connections from any Azure customer\'s resources, not just yours.',
+          issue:
+            'Database firewall rule 0.0.0.0-0.0.0.0 ("Allow Azure services") admits connections from any Azure customer\'s resources, not just yours.',
           blastRadius: "Any workload running in Azure, including other tenants', can reach the database endpoint.",
           suggestion: "Use a private endpoint or VNet integration instead of the Allow-Azure-services rule.",
         }),
@@ -127,9 +139,13 @@ const dbFirewallCheck: Precheck = (rc) => {
   }
 
   if (rc.type === "google_sql_database_instance") {
-    const ipConfig = asArray<Record<string, unknown>>(asArray<Record<string, unknown>>(a.settings)[0]?.ip_configuration)[0];
+    const ipConfig = asArray<Record<string, unknown>>(
+      asArray<Record<string, unknown>>(a.settings)[0]?.ip_configuration,
+    )[0];
     if (!ipConfig || ipConfig.ipv4_enabled === false) return [];
-    const open = asArray<Record<string, unknown>>(ipConfig.authorized_networks).filter((n) => OPEN_SOURCES.has(String(n?.value)));
+    const open = asArray<Record<string, unknown>>(ipConfig.authorized_networks).filter((n) =>
+      OPEN_SOURCES.has(String(n?.value)),
+    );
     if (!open.length) return [];
     return [
       finding(rc, "open-ingress", {
@@ -137,7 +153,8 @@ const dbFirewallCheck: Precheck = (rc) => {
         category: "network-exposure",
         issue: `Cloud SQL instance has a public IP and authorizes ${open.map((n) => n.value).join(", ")}.`,
         blastRadius: "The database is reachable from the whole internet; only the password protects it.",
-        suggestion: "Remove the 0.0.0.0/0 authorized network; use private IP, or the Cloud SQL Auth Proxy with IAM authentication.",
+        suggestion:
+          "Remove the 0.0.0.0/0 authorized network; use private IP, or the Cloud SQL Auth Proxy with IAM authentication.",
       }),
     ];
   }
@@ -161,7 +178,8 @@ const firewallRuleCheck: Precheck = (rc) => {
         severity === "low"
           ? "Public HTTP(S) exposure; expected for load balancers, risky for anything else."
           : "Anything this rule applies to is reachable from the whole internet on these ports.",
-      suggestion: "Restrict the source to known CIDRs, a VPN, or a private network; use a bastion/IAP/SSM-style access service instead of open SSH/RDP.",
+      suggestion:
+        "Restrict the source to known CIDRs, a VPN, or a private network; use a bastion/IAP/SSM-style access service instead of open SSH/RDP.",
     }),
   ];
 };

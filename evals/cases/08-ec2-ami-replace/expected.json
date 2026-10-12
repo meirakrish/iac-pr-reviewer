@@ -1,7 +1,5 @@
 {
   "description": "AMI bump forces replacement of a single production API instance (destroy-before-create => downtime).",
   "risk": { "min": "medium", "max": "high" },
-  "findings": [
-    { "resource": "aws_instance.api", "category": "replace", "minSeverity": "medium" }
-  ]
+  "findings": [{ "resource": "aws_instance.api", "category": "replace", "minSeverity": "medium" }]
 }

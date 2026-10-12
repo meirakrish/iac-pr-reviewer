@@ -10,7 +10,9 @@ export interface DetectedMove {
   movedTo: string;
 }
 
-/** Attributes that identify the real-world object; a delete+create sharing one of these is almost certainly a rename. */
+/**
+ * Attributes that identify the real-world object; a delete+create sharing one of these is almost certainly a rename.
+ */
 const IDENTITY_ATTRS = [
   "bucket",
   "identifier",
@@ -56,7 +58,11 @@ export function detectMoves(all: ResourceChange[]): Map<string, DetectedMove> {
   // 1. Same resource address inside a different module (module renamed or re-nested).
   for (const d of deleted) {
     const c = created.find(
-      (c) => !used.has(c) && c.type === d.type && relativeAddress(c) === relativeAddress(d) && modulePath(c) !== modulePath(d),
+      (c) =>
+        !used.has(c) &&
+        c.type === d.type &&
+        relativeAddress(c) === relativeAddress(d) &&
+        modulePath(c) !== modulePath(d),
     );
     if (c) {
       used.add(c);

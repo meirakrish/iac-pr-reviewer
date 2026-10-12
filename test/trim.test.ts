@@ -5,11 +5,18 @@ import { evalPlan, rc } from "./helpers.js";
 
 describe("applyMask", () => {
   it("replaces nested sensitive values", () => {
-    expect(applyMask({ a: 1, b: { c: "secret", d: 2 } }, { b: { c: true } }, SENSITIVE)).toEqual({ a: 1, b: { c: SENSITIVE, d: 2 } });
+    expect(applyMask({ a: 1, b: { c: "secret", d: 2 } }, { b: { c: true } }, SENSITIVE)).toEqual({
+      a: 1,
+      b: { c: SENSITIVE, d: 2 },
+    });
   });
 
   it("materialises unknown attributes Terraform omitted from `after`", () => {
-    expect(applyMask({ name: "x" }, { id: true, arn: true }, UNKNOWN)).toEqual({ name: "x", id: UNKNOWN, arn: UNKNOWN });
+    expect(applyMask({ name: "x" }, { id: true, arn: true }, UNKNOWN)).toEqual({
+      name: "x",
+      id: UNKNOWN,
+      arn: UNKNOWN,
+    });
   });
 
   it("does not invent keys for sensitive masks", () => {
@@ -41,7 +48,10 @@ describe("trimPlan", () => {
   });
 
   it("omits resources beyond the character budget", () => {
-    const changes = Array.from({ length: 20 }, (_, i) => ({ ...rc("aws_sqs_queue", { name: `q${i}`, pad: "x".repeat(200) }), address: `aws_sqs_queue.q${i}` }));
+    const changes = Array.from({ length: 20 }, (_, i) => ({
+      ...rc("aws_sqs_queue", { name: `q${i}`, pad: "x".repeat(200) }),
+      address: `aws_sqs_queue.q${i}`,
+    }));
     const trimmed = trimPlan(changes, 1000);
     expect(trimmed.changes.length).toBeGreaterThan(0);
     expect(trimmed.changes.length + trimmed.omitted.length).toBe(20);

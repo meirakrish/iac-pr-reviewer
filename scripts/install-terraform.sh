@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install Terraform on Ubuntu/WSL from HashiCorp's official apt repo.
+# Install Terraform on Ubuntu from HashiCorp's official apt repo.
 # Uses the "noble" (24.04) suite, since HashiCorp may not publish newer Ubuntu codenames yet.
 set -euo pipefail
 

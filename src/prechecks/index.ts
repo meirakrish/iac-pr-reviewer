@@ -10,7 +10,14 @@ import type { Precheck, PrecheckContext } from "./util.js";
 
 export type { PrecheckContext } from "./util.js";
 
-export const PRECHECKS: Precheck[] = [destroyCheck, iamCheck, ingressCheck, publicStorageCheck, encryptionCheck, tagsCheck];
+export const PRECHECKS: Precheck[] = [
+  destroyCheck,
+  iamCheck,
+  ingressCheck,
+  publicStorageCheck,
+  encryptionCheck,
+  tagsCheck,
+];
 
 /** Run every deterministic check against the changed resources. Findings are sorted most severe first. */
 export function runPrechecks(changes: ResourceChange[], ctx: PrecheckContext): Finding[] {

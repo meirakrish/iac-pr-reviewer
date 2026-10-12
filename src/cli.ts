@@ -33,7 +33,10 @@ const program = new Command()
     const plan = await loadPlanFile(opts.plan);
     const result = await reviewPlan(plan, config, { log });
 
-    const report = opts.format === "json" ? JSON.stringify(result, null, 2) + "\n" : renderMarkdown(result, { failOn: config.failOn });
+    const report =
+      opts.format === "json"
+        ? JSON.stringify(result, null, 2) + "\n"
+        : renderMarkdown(result, { failOn: config.failOn });
     if (opts.out) await writeFile(opts.out, report);
     else process.stdout.write(report);
 

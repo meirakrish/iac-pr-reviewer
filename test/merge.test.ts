@@ -27,7 +27,10 @@ const llmFinding = (o: Partial<LlmFinding>): LlmFinding => ({
   ...o,
 });
 
-const defaultActions: [string, ChangeKind][] = [["aws_db_instance.orders", "delete"], ["aws_iam_role.x", "create"]];
+const defaultActions: [string, ChangeKind][] = [
+  ["aws_db_instance.orders", "delete"],
+  ["aws_iam_role.x", "create"],
+];
 
 function merge(prechecks: Finding[], llm: LlmReview | null, actions = defaultActions) {
   const input: MergeInput = { prechecks, llm, llmMeta, stats, actions: new Map(actions) };
@@ -39,18 +42,39 @@ describe("mergeReview", () => {
     const r = merge([pre], { riskLevel: "low", summary: "fine", findings: [llmFinding({ severity: "low" })] });
     expect(r.riskLevel).toBe("critical");
     expect(r.findings).toHaveLength(1);
-    expect(r.findings[0]).toMatchObject({ severity: "critical", source: "both", issue: pre.issue, blastRadius: "Orders API loses its database." });
+    expect(r.findings[0]).toMatchObject({
+      severity: "critical",
+      source: "both",
+      issue: pre.issue,
+      blastRadius: "Orders API loses its database.",
+    });
   });
 
   it("keeps the rule's explanation when the LLM's text is just a severity word", () => {
-    const r = merge([pre], { riskLevel: "critical", summary: "s", findings: [llmFinding({ blastRadius: "High", suggestion: "Medium" })] });
+    const r = merge([pre], {
+      riskLevel: "critical",
+      summary: "s",
+      findings: [llmFinding({ blastRadius: "High", suggestion: "Medium" })],
+    });
     expect(r.findings[0]).toMatchObject({ source: "both", blastRadius: pre.blastRadius, suggestion: pre.suggestion });
   });
 
   it("never replaces an exact computed fix with the LLM's suggestion", () => {
-    const moved: Finding = { ...pre, ruleId: "missing-moved-block", suggestion: "Add a `moved` block with `from = module.a` and `to = module.b`." };
-    const r = merge([moved], { riskLevel: "critical", summary: "s", findings: [llmFinding({ suggestion: "Enable backups and deletion protection on the database." })] });
-    expect(r.findings[0]).toMatchObject({ source: "both", suggestion: moved.suggestion, blastRadius: "Orders API loses its database." });
+    const moved: Finding = {
+      ...pre,
+      ruleId: "missing-moved-block",
+      suggestion: "Add a `moved` block with `from = module.a` and `to = module.b`.",
+    };
+    const r = merge([moved], {
+      riskLevel: "critical",
+      summary: "s",
+      findings: [llmFinding({ suggestion: "Enable backups and deletion protection on the database." })],
+    });
+    expect(r.findings[0]).toMatchObject({
+      source: "both",
+      suggestion: moved.suggestion,
+      blastRadius: "Orders API loses its database.",
+    });
   });
 
   it("keeps precheck findings the LLM did not mention", () => {
@@ -59,18 +83,30 @@ describe("mergeReview", () => {
   });
 
   it("lets the LLM raise severity and add new findings", () => {
-    const r = merge([], { riskLevel: "high", summary: "s", findings: [llmFinding({ resource: "aws_iam_role.x", category: "iam" })] });
+    const r = merge([], {
+      riskLevel: "high",
+      summary: "s",
+      findings: [llmFinding({ resource: "aws_iam_role.x", category: "iam" })],
+    });
     expect(r.riskLevel).toBe("high");
     expect(r.findings[0]).toMatchObject({ source: "llm", ruleId: null });
   });
 
   it("drops LLM findings about resources not in the plan", () => {
-    const r = merge([], { riskLevel: "low", summary: "s", findings: [llmFinding({ resource: "aws_s3_bucket.imaginary" })] });
+    const r = merge([], {
+      riskLevel: "low",
+      summary: "s",
+      findings: [llmFinding({ resource: "aws_s3_bucket.imaginary" })],
+    });
     expect(r.findings).toEqual([]);
   });
 
   it("drops destroy/replace claims about resources that are only being created", () => {
-    const r = merge([], { riskLevel: "medium", summary: "s", findings: [llmFinding({ resource: "aws_iam_role.x", category: "destroy", severity: "medium" })] });
+    const r = merge([], {
+      riskLevel: "medium",
+      summary: "s",
+      findings: [llmFinding({ resource: "aws_iam_role.x", category: "destroy", severity: "medium" })],
+    });
     expect(r.findings).toEqual([]);
   });
 
@@ -78,7 +114,10 @@ describe("mergeReview", () => {
     const r = merge([], {
       riskLevel: "medium",
       summary: "s",
-      findings: [llmFinding({ resource: "aws_iam_role.x", category: "iam", severity: "medium" }), llmFinding({ resource: "aws_iam_role.x", category: "iam", severity: "high" })],
+      findings: [
+        llmFinding({ resource: "aws_iam_role.x", category: "iam", severity: "medium" }),
+        llmFinding({ resource: "aws_iam_role.x", category: "iam", severity: "high" }),
+      ],
     });
     expect(r.findings).toHaveLength(1);
     expect(r.findings[0]!.severity).toBe("high");

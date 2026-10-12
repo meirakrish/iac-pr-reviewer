@@ -49,7 +49,10 @@ describe("destroyCheck", () => {
 
 describe("iamCheck", () => {
   it("flags service-wide wildcards", () => {
-    const [f] = iamCheck(rc("aws_iam_policy", { policy: policy({ Effect: "Allow", Action: "s3:*", Resource: "arn:aws:s3:::b/*" }) }), ctx);
+    const [f] = iamCheck(
+      rc("aws_iam_policy", { policy: policy({ Effect: "Allow", Action: "s3:*", Resource: "arn:aws:s3:::b/*" }) }),
+      ctx,
+    );
     expect(f!.severity).toBe("medium");
   });
 
@@ -65,7 +68,9 @@ describe("iamCheck", () => {
   });
 
   it("ignores Deny statements and unknown (unparseable) policies", () => {
-    expect(iamCheck(rc("aws_iam_policy", { policy: policy({ Effect: "Deny", Action: "*", Resource: "*" }) }), ctx)).toEqual([]);
+    expect(
+      iamCheck(rc("aws_iam_policy", { policy: policy({ Effect: "Deny", Action: "*", Resource: "*" }) }), ctx),
+    ).toEqual([]);
     expect(iamCheck(rc("aws_iam_policy", {}), ctx)).toEqual([]);
   });
 });
@@ -75,7 +80,10 @@ describe("iamCheck privilege escalation", () => {
   const check = (...stmts: object[]) => iamCheck(rc("aws_iam_policy", { policy: policy(...stmts) }), ctx);
 
   it("flags iam:PassRole on any role combined with compute creation, even across statements", () => {
-    const [f] = check(allow("iam:PassRole", "*"), allow("lambda:CreateFunction", "arn:aws:lambda:us-east-1:123456789012:function:app-*"));
+    const [f] = check(
+      allow("iam:PassRole", "*"),
+      allow("lambda:CreateFunction", "arn:aws:lambda:us-east-1:123456789012:function:app-*"),
+    );
     expect(f).toMatchObject({ severity: "high", ruleId: "iam-privilege-escalation" });
     expect(f!.issue).toContain("lambda:CreateFunction");
   });
@@ -86,7 +94,12 @@ describe("iamCheck privilege escalation", () => {
   });
 
   it("does not flag PassRole scoped to a specific role", () => {
-    expect(check(allow("iam:PassRole", "arn:aws:iam::123456789012:role/app-lambda"), allow("lambda:CreateFunction", "arn:aws:lambda:us-east-1:123456789012:function:app"))).toEqual([]);
+    expect(
+      check(
+        allow("iam:PassRole", "arn:aws:iam::123456789012:role/app-lambda"),
+        allow("lambda:CreateFunction", "arn:aws:lambda:us-east-1:123456789012:function:app"),
+      ),
+    ).toEqual([]);
   });
 
   it("does not flag PassRole without a compute action", () => {
@@ -95,7 +108,10 @@ describe("iamCheck privilege escalation", () => {
   });
 
   it("flags self-escalating IAM actions on any resource, but not on a specific one", () => {
-    expect(check(allow("iam:CreatePolicyVersion", "*"))[0]).toMatchObject({ severity: "high", ruleId: "iam-privilege-escalation" });
+    expect(check(allow("iam:CreatePolicyVersion", "*"))[0]).toMatchObject({
+      severity: "high",
+      ruleId: "iam-privilege-escalation",
+    });
     expect(check(allow("iam:CreatePolicyVersion", "arn:aws:iam::123456789012:policy/app"))).toEqual([]);
   });
 
@@ -114,19 +130,43 @@ describe("iamCheck privilege escalation", () => {
 
 describe("ingressCheck", () => {
   it("handles aws_vpc_security_group_ingress_rule with IPv6", () => {
-    const [f] = ingressCheck(rc("aws_vpc_security_group_ingress_rule", { cidr_ipv6: "::/0", from_port: 5432, to_port: 5432, ip_protocol: "tcp" }), ctx);
+    const [f] = ingressCheck(
+      rc("aws_vpc_security_group_ingress_rule", {
+        cidr_ipv6: "::/0",
+        from_port: 5432,
+        to_port: 5432,
+        ip_protocol: "tcp",
+      }),
+      ctx,
+    );
     expect(f!.severity).toBe("critical");
   });
 
   it("treats protocol -1 as all traffic", () => {
-    const [f] = ingressCheck(rc("aws_security_group_rule", { type: "ingress", protocol: "-1", from_port: 0, to_port: 0, cidr_blocks: ["0.0.0.0/0"] }), ctx);
+    const [f] = ingressCheck(
+      rc("aws_security_group_rule", {
+        type: "ingress",
+        protocol: "-1",
+        from_port: 0,
+        to_port: 0,
+        cidr_blocks: ["0.0.0.0/0"],
+      }),
+      ctx,
+    );
     expect(f!.severity).toBe("critical");
     expect(f!.issue).toContain("all ports");
   });
 
   it("ignores egress rules and private CIDRs", () => {
-    expect(ingressCheck(rc("aws_security_group_rule", { type: "egress", protocol: "-1", cidr_blocks: ["0.0.0.0/0"] }), ctx)).toEqual([]);
-    expect(ingressCheck(rc("aws_security_group_rule", { type: "ingress", from_port: 22, to_port: 22, cidr_blocks: ["10.0.0.0/8"] }), ctx)).toEqual([]);
+    expect(
+      ingressCheck(rc("aws_security_group_rule", { type: "egress", protocol: "-1", cidr_blocks: ["0.0.0.0/0"] }), ctx),
+    ).toEqual([]);
+    expect(
+      ingressCheck(
+        rc("aws_security_group_rule", { type: "ingress", from_port: 22, to_port: 22, cidr_blocks: ["10.0.0.0/8"] }),
+        ctx,
+      ),
+    ).toEqual([]);
   });
 });
 
@@ -137,7 +177,13 @@ describe("publicStorageCheck", () => {
   });
 
   it("does not flag bucket policies with a Condition", () => {
-    const p = policy({ Effect: "Allow", Principal: "*", Action: "s3:GetObject", Resource: "*", Condition: { StringEquals: { "aws:SourceArn": "x" } } });
+    const p = policy({
+      Effect: "Allow",
+      Principal: "*",
+      Action: "s3:GetObject",
+      Resource: "*",
+      Condition: { StringEquals: { "aws:SourceArn": "x" } },
+    });
     expect(publicStorageCheck(rc("aws_s3_bucket_policy", { policy: p }), ctx)).toEqual([]);
   });
 });
@@ -171,11 +217,26 @@ describe("tagsCheck", () => {
 });
 
 describe("Azure rules", () => {
-  const nsgRule = (o: object) => ({ direction: "Inbound", access: "Allow", protocol: "Tcp", source_address_prefix: "*", destination_port_range: "22", ...o });
+  const nsgRule = (o: object) => ({
+    direction: "Inbound",
+    access: "Allow",
+    protocol: "Tcp",
+    source_address_prefix: "*",
+    destination_port_range: "22",
+    ...o,
+  });
 
   it("treats NSG wildcard ports and port lists correctly", () => {
-    expect(ingressCheck(rc("azurerm_network_security_rule", nsgRule({ destination_port_range: "*" })), ctx)[0]!.issue).toContain("all ports");
-    const [f] = ingressCheck(rc("azurerm_network_security_rule", nsgRule({ destination_port_range: null, destination_port_ranges: ["443", "8000-8100"] })), ctx);
+    expect(
+      ingressCheck(rc("azurerm_network_security_rule", nsgRule({ destination_port_range: "*" })), ctx)[0]!.issue,
+    ).toContain("all ports");
+    const [f] = ingressCheck(
+      rc(
+        "azurerm_network_security_rule",
+        nsgRule({ destination_port_range: null, destination_port_ranges: ["443", "8000-8100"] }),
+      ),
+      ctx,
+    );
     expect(f!.severity).toBe("high");
   });
 
@@ -185,38 +246,87 @@ describe("Azure rules", () => {
   });
 
   it("rates the 'Allow Azure services' firewall rule as medium", () => {
-    const [f] = ingressCheck(rc("azurerm_postgresql_flexible_server_firewall_rule", { start_ip_address: "0.0.0.0", end_ip_address: "0.0.0.0" }), ctx);
+    const [f] = ingressCheck(
+      rc("azurerm_postgresql_flexible_server_firewall_rule", {
+        start_ip_address: "0.0.0.0",
+        end_ip_address: "0.0.0.0",
+      }),
+      ctx,
+    );
     expect(f!.severity).toBe("medium");
   });
 
   it("resolves built-in role GUIDs and scales severity with scope", () => {
-    const owner = "/subscriptions/x/providers/Microsoft.Authorization/roleDefinitions/8e3af657-a8ff-443c-a75c-2fe8c4bcb635";
-    expect(iamCheck(rc("azurerm_role_assignment", { role_definition_id: owner, scope: "/subscriptions/x/resourceGroups/rg" }), ctx)[0]!.severity).toBe("high");
-    expect(iamCheck(rc("azurerm_role_assignment", { role_definition_name: "User Access Administrator", scope: "/providers/Microsoft.Management/managementGroups/root" }), ctx)[0]!.severity).toBe("critical");
-    expect(iamCheck(rc("azurerm_role_assignment", { role_definition_name: "Contributor", scope: "/subscriptions/x/resourceGroups/rg" }), ctx)).toEqual([]);
-    expect(iamCheck(rc("azurerm_role_assignment", { role_definition_name: "Reader", scope: "/subscriptions/x" }), ctx)).toEqual([]);
+    const owner =
+      "/subscriptions/x/providers/Microsoft.Authorization/roleDefinitions/8e3af657-a8ff-443c-a75c-2fe8c4bcb635";
+    expect(
+      iamCheck(
+        rc("azurerm_role_assignment", { role_definition_id: owner, scope: "/subscriptions/x/resourceGroups/rg" }),
+        ctx,
+      )[0]!.severity,
+    ).toBe("high");
+    expect(
+      iamCheck(
+        rc("azurerm_role_assignment", {
+          role_definition_name: "User Access Administrator",
+          scope: "/providers/Microsoft.Management/managementGroups/root",
+        }),
+        ctx,
+      )[0]!.severity,
+    ).toBe("critical");
+    expect(
+      iamCheck(
+        rc("azurerm_role_assignment", {
+          role_definition_name: "Contributor",
+          scope: "/subscriptions/x/resourceGroups/rg",
+        }),
+        ctx,
+      ),
+    ).toEqual([]);
+    expect(
+      iamCheck(rc("azurerm_role_assignment", { role_definition_name: "Reader", scope: "/subscriptions/x" }), ctx),
+    ).toEqual([]);
   });
 
   it("flags wildcard custom roles unless Microsoft.Authorization is excluded", () => {
-    const role = (not_actions: string[]) => rc("azurerm_role_definition", { permissions: [{ actions: ["*"], not_actions }] });
+    const role = (not_actions: string[]) =>
+      rc("azurerm_role_definition", { permissions: [{ actions: ["*"], not_actions }] });
     expect(iamCheck(role([]), ctx)[0]!.severity).toBe("critical");
     expect(iamCheck(role(["Microsoft.Authorization/*/Write"]), ctx)[0]!.severity).toBe("high");
   });
 
   it("flags weak TLS and plaintext on storage and Redis", () => {
-    expect(encryptionCheck(rc("azurerm_storage_account", { https_traffic_only_enabled: true, min_tls_version: "TLS1_1" }), ctx)[0]!.severity).toBe("medium");
-    expect(encryptionCheck(rc("azurerm_storage_account", { https_traffic_only_enabled: true, min_tls_version: "TLS1_2" }), ctx)).toEqual([]);
+    expect(
+      encryptionCheck(
+        rc("azurerm_storage_account", { https_traffic_only_enabled: true, min_tls_version: "TLS1_1" }),
+        ctx,
+      )[0]!.severity,
+    ).toBe("medium");
+    expect(
+      encryptionCheck(
+        rc("azurerm_storage_account", { https_traffic_only_enabled: true, min_tls_version: "TLS1_2" }),
+        ctx,
+      ),
+    ).toEqual([]);
     expect(encryptionCheck(rc("azurerm_redis_cache", { non_ssl_port_enabled: true }), ctx)).toHaveLength(1);
   });
 
   it("only flags blob/container access on storage containers", () => {
     expect(publicStorageCheck(rc("azurerm_storage_container", { container_access_type: "private" }), ctx)).toEqual([]);
-    expect(publicStorageCheck(rc("azurerm_storage_container", { container_access_type: "blob" }), ctx)[0]!.severity).toBe("high");
+    expect(
+      publicStorageCheck(rc("azurerm_storage_container", { container_access_type: "blob" }), ctx)[0]!.severity,
+    ).toBe("high");
   });
 });
 
 describe("GCP rules", () => {
-  const fw = (o: object) => rc("google_compute_firewall", { direction: "INGRESS", source_ranges: ["0.0.0.0/0"], allow: [{ protocol: "tcp", ports: ["22"] }], ...o });
+  const fw = (o: object) =>
+    rc("google_compute_firewall", {
+      direction: "INGRESS",
+      source_ranges: ["0.0.0.0/0"],
+      allow: [{ protocol: "tcp", ports: ["22"] }],
+      ...o,
+    });
 
   it("treats a firewall allow without ports, or protocol all, as all traffic", () => {
     expect(ingressCheck(fw({ allow: [{ protocol: "tcp", ports: [] }] }), ctx)[0]!.issue).toContain("all ports");
@@ -234,13 +344,22 @@ describe("GCP rules", () => {
   });
 
   it("rates public write access on buckets as critical and allAuthenticatedUsers as public", () => {
-    expect(publicStorageCheck(rc("google_storage_bucket_iam_binding", { role: "roles/storage.objectAdmin", members: ["allUsers"] }), ctx)[0]!.severity).toBe("critical");
-    const [f] = publicStorageCheck(rc("google_storage_bucket_iam_member", { role: "roles/storage.objectViewer", member: "allAuthenticatedUsers" }), ctx);
+    expect(
+      publicStorageCheck(
+        rc("google_storage_bucket_iam_binding", { role: "roles/storage.objectAdmin", members: ["allUsers"] }),
+        ctx,
+      )[0]!.severity,
+    ).toBe("critical");
+    const [f] = publicStorageCheck(
+      rc("google_storage_bucket_iam_member", { role: "roles/storage.objectViewer", member: "allAuthenticatedUsers" }),
+      ctx,
+    );
     expect(f!.issue).toContain("any Google account");
   });
 
   it("grades project/folder/org grants by role", () => {
-    const grant = (type: string, role: string, member = "user:a@example.com") => iamCheck(rc(type, { role, member }), ctx);
+    const grant = (type: string, role: string, member = "user:a@example.com") =>
+      iamCheck(rc(type, { role, member }), ctx);
     expect(grant("google_project_iam_member", "roles/editor")[0]!.severity).toBe("high");
     expect(grant("google_organization_iam_member", "roles/iam.serviceAccountTokenCreator")[0]!.severity).toBe("high");
     expect(grant("google_project_iam_member", "roles/viewer", "allUsers")[0]!.severity).toBe("critical");
@@ -248,13 +367,31 @@ describe("GCP rules", () => {
   });
 
   it("flags custom roles with setIamPolicy but not actAs without compute", () => {
-    expect(iamCheck(rc("google_project_iam_custom_role", { permissions: ["resourcemanager.projects.setIamPolicy"] }), ctx)).toHaveLength(1);
-    expect(iamCheck(rc("google_project_iam_custom_role", { permissions: ["iam.serviceAccounts.actAs", "storage.objects.get"] }), ctx)).toEqual([]);
+    expect(
+      iamCheck(rc("google_project_iam_custom_role", { permissions: ["resourcemanager.projects.setIamPolicy"] }), ctx),
+    ).toHaveLength(1);
+    expect(
+      iamCheck(
+        rc("google_project_iam_custom_role", { permissions: ["iam.serviceAccounts.actAs", "storage.objects.get"] }),
+        ctx,
+      ),
+    ).toEqual([]);
   });
 
   it("checks labels (not network tags) on GCP resources", () => {
-    expect(tagsCheck(rc("google_compute_instance", { tags: ["ssh"], labels: { team: "a" }, terraform_labels: { team: "a" } }), ctx)).toEqual([]);
-    expect(tagsCheck(rc("google_compute_instance", { tags: ["ssh"], labels: null, terraform_labels: {} }), ctx)[0]!.issue).toContain("no labels");
-    expect(tagsCheck(rc("google_storage_bucket", { labels: { team: "a" }, terraform_labels: { team: "a" } }), { requiredTags: ["Team"] })).toEqual([]);
+    expect(
+      tagsCheck(
+        rc("google_compute_instance", { tags: ["ssh"], labels: { team: "a" }, terraform_labels: { team: "a" } }),
+        ctx,
+      ),
+    ).toEqual([]);
+    expect(
+      tagsCheck(rc("google_compute_instance", { tags: ["ssh"], labels: null, terraform_labels: {} }), ctx)[0]!.issue,
+    ).toContain("no labels");
+    expect(
+      tagsCheck(rc("google_storage_bucket", { labels: { team: "a" }, terraform_labels: { team: "a" } }), {
+        requiredTags: ["Team"],
+      }),
+    ).toEqual([]);
   });
 });

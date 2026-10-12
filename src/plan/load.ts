@@ -14,10 +14,14 @@ export function parsePlan(raw: string): TerraformPlan {
   try {
     data = JSON.parse(raw);
   } catch (err) {
-    throw new PlanError(`Plan is not valid JSON: ${(err as Error).message}. Did you pass the binary plan instead of \`terraform show -json\` output?`);
+    throw new PlanError(
+      `Plan is not valid JSON: ${(err as Error).message}. Did you pass the binary plan instead of \`terraform show -json\` output?`,
+    );
   }
   if (!data || typeof data !== "object" || !("format_version" in data)) {
-    throw new PlanError("Not a Terraform plan JSON: missing format_version. Generate it with `terraform show -json plan.tfplan`.");
+    throw new PlanError(
+      "Not a Terraform plan JSON: missing format_version. Generate it with `terraform show -json plan.tfplan`.",
+    );
   }
   const plan = data as TerraformPlan;
   if (plan.resource_changes !== undefined && !Array.isArray(plan.resource_changes)) {
@@ -38,7 +42,9 @@ export function changedResources(plan: TerraformPlan): ResourceChange[] {
 /** Counts per action for changed resources, plus resources renamed by `moved` blocks (from the full plan). */
 export function changeStats(changes: ResourceChange[], all: ResourceChange[] = changes): ChangeStats {
   const stats: ChangeStats = { create: 0, update: 0, delete: 0, replace: 0, moved: 0 };
-  stats.moved = all.filter((rc) => rc.mode === "managed" && rc.previous_address && rc.previous_address !== rc.address).length;
+  stats.moved = all.filter(
+    (rc) => rc.mode === "managed" && rc.previous_address && rc.previous_address !== rc.address,
+  ).length;
   for (const rc of changes) {
     const kind = changeKind(rc.change.actions);
     if (kind === "create" || kind === "update" || kind === "delete" || kind === "replace") stats[kind]++;

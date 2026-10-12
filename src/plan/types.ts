@@ -5,7 +5,7 @@ export type Action = "no-op" | "create" | "read" | "update" | "delete" | "forget
 
 export interface ResourceChange {
   address: string;
-  /** Set when a `moved` block (or refactor) renamed this resource. */
+  /** Set when the resource was renamed: by a `moved` block, or implicitly (e.g. adding `count`). */
   previous_address?: string;
   module_address?: string;
   mode: "managed" | "data";

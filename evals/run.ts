@@ -80,7 +80,8 @@ console.log(`${"finding recall".padEnd(18)}${pct(agg.recall).padStart(28)}   ${p
 console.log(`${"finding precision".padEnd(18)}${pct(agg.precision).padStart(28)}   ${pct(base.precision)}`);
 console.log(`${"LLM-only recall".padEnd(18)}${pct(agg.llmOnlyRecall).padStart(28)}   ${pct(base.llmOnlyRecall)}`);
 const llmFailures = runs.filter((r) => r.result.llm.error).length;
-if (llmFailures) console.log(`\n⚠ LLM call failed on ${llmFailures}/${runs.length} cases; those fell back to prechecks only.`);
+if (llmFailures)
+  console.log(`\n⚠ LLM call failed on ${llmFailures}/${runs.length} cases; those fell back to prechecks only.`);
 console.log(`avg latency ${(runs.reduce((n, r) => n + r.ms, 0) / runs.length / 1000).toFixed(1)}s`);
 
 await mkdir(RESULTS_DIR, { recursive: true });

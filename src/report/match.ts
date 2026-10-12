@@ -1,6 +1,9 @@
 import type { Category } from "../schema.js";
 
-/** Categories that describe the same underlying risk; used to match LLM findings to prechecks and to expected eval findings. */
+/**
+ * Categories that describe the same underlying risk.
+ * Used to match LLM findings to prechecks, and actual findings to expected eval findings.
+ */
 const CATEGORY_GROUP: Record<Category, string> = {
   destroy: "lifecycle",
   replace: "lifecycle",
@@ -14,6 +17,9 @@ const CATEGORY_GROUP: Record<Category, string> = {
   other: "other",
 };
 
-export function sameIssue(a: { resource: string; category: Category }, b: { resource: string; category: Category }): boolean {
+export function sameIssue(
+  a: { resource: string; category: Category },
+  b: { resource: string; category: Category },
+): boolean {
   return a.resource === b.resource && CATEGORY_GROUP[a.category] === CATEGORY_GROUP[b.category];
 }
