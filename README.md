@@ -1,10 +1,10 @@
 # iac-pr-reviewer
 
-Reviews a Terraform plan and tells you, in plain English, which changes are risky before you apply them.
+Reviews a Terraform plan and tells you, in plain English, which changes are risky before you apply them. Works with **AWS, Azure and GCP**.
 
 It combines two layers:
 
-- **Rule-based checks**, which are fast, deterministic and always run. They catch destroys, IAM wildcards, open security groups, public S3 buckets, unencrypted storage and missing tags.
+- **Rule-based checks**, which are fast, deterministic and always run. They catch destroys, over-broad IAM, ports open to the internet, public storage, unencrypted storage or traffic, and missing tags.
 - **An LLM review** (local Ollama, Anthropic or OpenAI), which explains the impact and catches what rules can't, such as a publicly accessible database, a database with no backups, or audit logging being turned off.
 
 ## Example
@@ -84,7 +84,7 @@ npm link
 
 ### 3. Try it on a sample plan
 
-The repo ships with 11 example plans in `evals/cases/`. No AWS account is needed:
+The repo ships with 22 example plans (AWS, Azure and GCP) in `evals/cases/`. No cloud account is needed:
 
 ```bash
 iac-review --plan evals/cases/07-rds-public-unencrypted/plan.json
@@ -176,6 +176,7 @@ Every option can also be set through the environment, which is handy for CI:
 | `IAC_REVIEW_NUM_CTX` | `16384` | Ollama context window (tokens). Lower it if the GPU runs out of memory. |
 | `IAC_REVIEW_MAX_PLAN_CHARS` | `40000` | Maximum plan size sent to the LLM. The largest-risk changes are kept first. |
 | `IAC_REVIEW_TIMEOUT_MS` | `180000` | LLM request timeout |
+| `IAC_REVIEW_MAX_OUTPUT_TOKENS` | `4096` | Cap on LLM output; stops a runaway generation quickly |
 
 ---
 
@@ -183,23 +184,25 @@ Every option can also be set through the environment, which is handy for CI:
 
 ### Rule-based checks
 
-| Check | Flags | Severity |
-|---|---|---|
-| Destroy / replace | Resources being deleted or recreated | **critical** for data stores (RDS, S3, DynamoDB, KMS…), otherwise high/medium |
-| IAM wildcards | `Action: "*"`, `service:*`, `Resource: "*"`, `NotAction`, trust policies open to `Principal: "*"` | medium → **critical** (admin) |
-| IAM privilege escalation | `iam:PassRole` on any role plus an action that launches compute (Lambda, EC2, ECS, Glue, CloudFormation…), or self-granting IAM actions (`iam:CreatePolicyVersion`, `iam:Attach*Policy`, `iam:CreateAccessKey`…) on `Resource: "*"` | high |
-| Open ingress | `0.0.0.0/0` or `::/0` on security groups | **critical** for SSH/RDP/DB ports or all traffic, low for 80/443 |
-| Public S3 | Public ACLs, disabled public-access-block, bucket policies open to `*` | high / **critical** |
-| Unencrypted storage | RDS, Redshift, EBS, EFS, ElastiCache, EC2 volumes without encryption | medium / high |
-| Missing tags | Taggable resources with no tags, or missing `--required-tags` | low |
+| Check | AWS | Azure | GCP | Severity |
+|---|---|---|---|---|
+| **Destroy / replace** | any resource; data stores (RDS, S3, DynamoDB, KMS…) | any resource; data stores (SQL, Storage, Cosmos DB, Key Vault, resource groups…) | any resource; data stores (Cloud SQL, buckets, BigQuery, KMS, projects…) | **critical** for data stores, otherwise high/medium |
+| **Network exposure** | security groups open to `0.0.0.0/0` / `::/0` | NSG rules from `*` / `Internet` / `0.0.0.0/0`; SQL/Postgres/MySQL firewall rules open to all IPs | firewall rules from `0.0.0.0/0`; Cloud SQL authorized networks `0.0.0.0/0` | **critical** for SSH/RDP/DB ports or all traffic, low for 80/443 |
+| **IAM** | `Action`/`Resource: "*"`, `NotAction`, trust open to `Principal: "*"` | Owner / User Access Administrator assignments; custom roles with `*` | `roles/owner`, `roles/editor`, IAM-admin roles; `allUsers` members | medium → **critical** (admin, or subscription/org-wide) |
+| **Privilege escalation** | `iam:PassRole` + compute create; `iam:CreatePolicyVersion`, `iam:Attach*Policy`… on `*` | custom roles with `Microsoft.Authorization/*` write | custom roles with `actAs` + compute create, or `setIamPolicy`, SA key/token creation | high |
+| **Public storage** | public ACLs, disabled public-access-block, bucket policies open to `*` | containers with `blob`/`container` access; accounts allowing public containers (low) | bucket IAM for `allUsers`/`allAuthenticatedUsers`; public ACLs | high / **critical** for public write |
+| **Encryption** | unencrypted RDS, Redshift, EBS, EFS, ElastiCache, EC2 volumes | HTTP allowed or TLS < 1.2 on storage/SQL; Redis non-TLS port | Cloud SQL accepting unencrypted connections | medium / high |
+| **Missing tags** | `tags` (incl. provider `default_tags`) | `tags` | `labels` (incl. provider `default_labels`) | low |
+
+Azure and GCP encrypt disks and storage at rest by default, so for those clouds the encryption checks focus on traffic in transit.
 
 ### LLM review
 
 On top of the rules, the LLM looks for risks that need context, for example:
 
 - databases that are publicly accessible, or have no backups, final snapshot or deletion protection
-- cross-account trust and other IAM risks the escalation rules don't cover
-- audit logging or monitoring being turned off, KMS keys being deleted or disabled
+- cross-account trust and other IAM risks the rules don't cover
+- audit logging or monitoring being turned off; keys (KMS, Key Vault, Cloud KMS) being deleted or disabled
 - replacements that cascade to dependents (new IDs/ARNs, DNS, load balancers)
 
 It also writes the plain-English summary and the blast-radius/suggestion text for each finding.
@@ -222,20 +225,20 @@ npm run typecheck
 
 ### Evals: how good is the LLM?
 
-`evals/cases/` holds 11 scenarios (4 safe, 7 risky), each with a real Terraform plan and the findings a good reviewer should report. The eval runs the full pipeline on every case and scores it:
+`evals/cases/` holds 22 scenarios across AWS (01-11), Azure (12-16) and GCP (17-22), 5 safe and 17 risky, each with a real Terraform plan and the findings a good reviewer should report. The eval runs the full pipeline on every case and scores it:
 
 ```bash
 npm run eval
 ```
 
 ```
-✅ 01-safe-tag-update               risk low      (want low)  13.5s
-✅ 07-rds-public-unencrypted        risk high     (want high-critical)  6.4s
-✅ 09-iam-passrole-escalation       risk high     (want high-critical)  3.5s
+✅ 01-safe-tag-update               risk low      (want low)  5.4s
+✅ 13-azure-public-storage          risk high     (want high-critical)  7.1s
+✅ 21-gcp-sql-public                risk critical (want critical)  4.9s
 ...
                     ollama/qwen2.5:7b-instruct   prechecks only
 risk accuracy                             100%    100%
-finding recall                            100%     75%
+finding recall                            100%     85%
 finding precision                         100%    100%
 LLM-only recall                           100%      0%
 ```
@@ -269,7 +272,7 @@ The first compares a different model, the second uses a hosted provider (needs `
 
 ### Adding an eval case
 
-1. Create `evals/cases/12-my-case/main.tf` with the resources you want to test. Don't include a provider block; `evals/provider.tf` is shared.
+1. Create `evals/cases/23-my-case/main.tf` with the resources you want to test. Don't include provider blocks: the generator adds the ones you need (from `evals/providers/`) based on the resource types you use.
 2. To test updates, destroys or replacements, add a `terraform.tfstate` describing the "before" state (see `06-rds-destroy` for an example).
 3. Write `expected.json`:
    ```json
@@ -277,15 +280,18 @@ The first compares a different model, the second uses a hosted provider (needs `
      "description": "What this case tests",
      "risk": { "min": "high", "max": "critical" },
      "findings": [
-       { "resource": "aws_db_instance.x", "category": "network-exposure", "minSeverity": "high", "llmOnly": true }
+       { "resource": "aws_db_instance.x", "category": "network-exposure", "minSeverity": "high", "llmOnly": true },
+       { "resource": "aws_db_instance.x", "category": "data-loss", "minSeverity": "medium", "optional": true }
      ]
    }
    ```
-4. Generate the plan:
+   - `llmOnly`: a risk the rules can't catch; tracked separately as "LLM-only recall".
+   - `optional`: a valid finding that isn't required. It doesn't count toward recall, and reporting it isn't counted as a false alarm.
+4. Generate the plan (pass part of a case name to regenerate only that case):
    ```bash
-   ./evals/generate-plans.sh
+   ./evals/generate-plans.sh 23
    ```
-   This needs Terraform but no AWS account: it uses mock credentials and runs offline.
+   This needs Terraform (and `openssl` for Azure cases) but no cloud account. It uses mock credentials and runs offline. For Azure, it starts a fake Azure CLI and a tiny local Resource Manager stub (`evals/mock/`), because the azurerm provider authenticates as soon as it starts.
 
 ---
 
@@ -314,6 +320,10 @@ src/
   llm/              provider setup (Ollama/Anthropic/OpenAI) and the prompt
   report/           merge rule + LLM findings, render markdown
 test/               unit tests (vitest)
-evals/              eval cases, runner and scorer
+evals/
+  cases/            one folder per scenario: main.tf, optional tfstate, plan.json, expected.json
+  providers/        offline provider configs (aws, azurerm, google)
+  mock/             fake Azure CLI + Resource Manager stub for offline Azure plans
+  run.ts, score.ts  eval runner and scorer
 scripts/            helper scripts (Terraform install)
 ```

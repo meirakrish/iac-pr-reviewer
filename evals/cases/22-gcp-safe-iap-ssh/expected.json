@@ -1,0 +1,5 @@
+{
+  "description": "SSH allowed only from Google's IAP range, a locked-down bucket, and a scoped service-account grant. Nothing risky.",
+  "risk": { "min": "low", "max": "medium" },
+  "findings": []
+}

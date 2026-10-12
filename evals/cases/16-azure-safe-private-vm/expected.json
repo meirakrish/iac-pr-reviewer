@@ -1,0 +1,5 @@
+{
+  "description": "Private network: HTTPS only from the VNet, explicit deny from Internet, private storage with TLS 1.2. Nothing risky (the Deny rule must not be read as exposure).",
+  "risk": { "min": "low", "max": "low" },
+  "findings": []
+}

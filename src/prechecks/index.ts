@@ -4,13 +4,13 @@ import { destroyCheck } from "./destroy.js";
 import { encryptionCheck } from "./encryption.js";
 import { iamCheck } from "./iam.js";
 import { ingressCheck } from "./ingress.js";
-import { s3PublicCheck } from "./s3-public.js";
+import { publicStorageCheck } from "./public-storage.js";
 import { tagsCheck } from "./tags.js";
 import type { Precheck, PrecheckContext } from "./util.js";
 
 export type { PrecheckContext } from "./util.js";
 
-export const PRECHECKS: Precheck[] = [destroyCheck, iamCheck, ingressCheck, s3PublicCheck, encryptionCheck, tagsCheck];
+export const PRECHECKS: Precheck[] = [destroyCheck, iamCheck, ingressCheck, publicStorageCheck, encryptionCheck, tagsCheck];
 
 /** Run every deterministic check against the changed resources. Findings are sorted most severe first. */
 export function runPrechecks(changes: ResourceChange[], ctx: PrecheckContext): Finding[] {

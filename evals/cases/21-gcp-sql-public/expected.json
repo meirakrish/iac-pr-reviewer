@@ -1,0 +1,9 @@
+{
+  "description": "New Cloud SQL instance reachable from 0.0.0.0/0, accepting unencrypted connections, with backups and deletion protection off.",
+  "risk": { "min": "critical", "max": "critical" },
+  "findings": [
+    { "resource": "google_sql_database_instance.analytics", "category": "network-exposure", "minSeverity": "critical" },
+    { "resource": "google_sql_database_instance.analytics", "category": "encryption", "minSeverity": "medium" },
+    { "resource": "google_sql_database_instance.analytics", "category": "data-loss", "minSeverity": "medium", "llmOnly": true }
+  ]
+}

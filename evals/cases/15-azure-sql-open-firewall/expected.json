@@ -1,0 +1,20 @@
+{
+  "description": "Azure SQL server with a firewall rule allowing every IPv4 address.",
+  "risk": {
+    "min": "critical",
+    "max": "critical"
+  },
+  "findings": [
+    {
+      "resource": "azurerm_mssql_firewall_rule.everyone",
+      "category": "network-exposure",
+      "minSeverity": "critical"
+    },
+    {
+      "resource": "azurerm_mssql_server.orders",
+      "category": "network-exposure",
+      "minSeverity": "medium",
+      "optional": true
+    }
+  ]
+}

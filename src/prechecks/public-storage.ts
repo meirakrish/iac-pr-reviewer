@@ -1,5 +1,5 @@
 import type { Severity } from "../schema.js";
-import { after, finding, isPublicPrincipal, parsePolicy, type Precheck } from "./util.js";
+import { after, asArray, finding, isPublicPrincipal, parsePolicy, type Precheck } from "./util.js";
 
 const PUBLIC_ACLS: Record<string, Severity> = {
   "public-read": "high",
@@ -9,7 +9,7 @@ const PUBLIC_ACLS: Record<string, Severity> = {
 
 const BLOCK_FLAGS = ["block_public_acls", "block_public_policy", "ignore_public_acls", "restrict_public_buckets"];
 
-export const s3PublicCheck: Precheck = (rc) => {
+const s3Check: Precheck = (rc) => {
   const a = after(rc);
   if (!a) return [];
 
@@ -61,3 +61,87 @@ export const s3PublicCheck: Precheck = (rc) => {
 
   return [];
 };
+
+/** Azure containers allow anonymous reads via container_access_type; accounts gate it with allow_nested_items_to_be_public. */
+const azureStorageCheck: Precheck = (rc) => {
+  const a = after(rc);
+  if (!a) return [];
+
+  if (rc.type === "azurerm_storage_container") {
+    const access = String(a.container_access_type ?? "private");
+    if (access !== "blob" && access !== "container") return [];
+    return [
+      finding(rc, "azure-public-container", {
+        severity: "high",
+        category: "public-storage",
+        issue: `Container access type is "${access}": anyone can read blobs${access === "container" ? " and list the container" : ""} without authentication.`,
+        blastRadius: "Every blob in the container can be downloaded from the internet by anyone who knows or guesses the URL.",
+        suggestion: 'Set container_access_type = "private" and share data with SAS tokens or a CDN with private origin access.',
+      }),
+    ];
+  }
+
+  if (rc.type === "azurerm_storage_account" && a.allow_nested_items_to_be_public === true) {
+    return [
+      finding(rc, "azure-storage-public-allowed", {
+        severity: "low",
+        category: "public-storage",
+        issue: "Storage account allows containers to be made public (allow_nested_items_to_be_public = true).",
+        blastRadius: "A single container setting is enough to expose data publicly.",
+        suggestion: "Set allow_nested_items_to_be_public = false unless this account intentionally serves public content.",
+      }),
+    ];
+  }
+
+  return [];
+};
+
+const GCP_PUBLIC_MEMBERS = new Set(["allUsers", "allAuthenticatedUsers"]);
+const GCP_PUBLIC_ACLS: Record<string, Severity> = { publicRead: "high", publicReadWrite: "critical" };
+
+function isGcsWriteRole(role: string): boolean {
+  return /objectAdmin|objectCreator|storage\.admin|legacyBucketWriter|legacyBucketOwner|objectUser/.test(role);
+}
+
+const gcsCheck: Precheck = (rc) => {
+  const a = after(rc);
+  if (!a) return [];
+
+  if (rc.type === "google_storage_bucket_iam_member" || rc.type === "google_storage_bucket_iam_binding") {
+    const members = [...asArray<string>(a.member), ...asArray<string>(a.members)].filter((m) => GCP_PUBLIC_MEMBERS.has(m));
+    if (!members.length) return [];
+    const role = String(a.role ?? "");
+    const write = isGcsWriteRole(role);
+    return [
+      finding(rc, "gcs-public-iam", {
+        severity: write ? "critical" : "high",
+        category: "public-storage",
+        issue: `Bucket grants ${role} to ${members.join(", ")}${members.includes("allAuthenticatedUsers") ? " (any Google account, not just your organization)" : ""}.`,
+        blastRadius: write
+          ? "Anyone on the internet can read, upload and overwrite objects in the bucket."
+          : "Every object in the bucket can be downloaded by anyone on the internet.",
+        suggestion: "Grant access to specific users, groups or service accounts; enforce public_access_prevention on the bucket.",
+      }),
+    ];
+  }
+
+  if (rc.type === "google_storage_bucket_acl" || rc.type === "google_storage_default_object_acl" || rc.type === "google_storage_object_acl") {
+    const predefined = String(a.predefined_acl ?? "");
+    const publicEntities = asArray<string>(a.role_entity).filter((e) => /:(allUsers|allAuthenticatedUsers)$/.test(e));
+    const severity = GCP_PUBLIC_ACLS[predefined] ?? (publicEntities.length ? "high" : undefined);
+    if (!severity) return [];
+    return [
+      finding(rc, "gcs-public-acl", {
+        severity,
+        category: "public-storage",
+        issue: `Public ACL on GCS (${predefined || publicEntities.join(", ")}).`,
+        blastRadius: "Objects are readable" + (severity === "critical" ? " and writable" : "") + " by anyone on the internet.",
+        suggestion: "Remove public ACL entries; prefer uniform bucket-level access with IAM and public_access_prevention = \"enforced\".",
+      }),
+    ];
+  }
+
+  return [];
+};
+
+export const publicStorageCheck: Precheck = (rc, ctx) => [...s3Check(rc, ctx), ...azureStorageCheck(rc, ctx), ...gcsCheck(rc, ctx)];

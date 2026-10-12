@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Fake Azure CLI: returns a dummy account and an unsigned JWT so the azurerm provider can plan offline.
+echo "az $*" >> "${FAKE_AZ_LOG:-/dev/null}"
+b64() { printf '%s' "$1" | base64 -w0 | tr '+/' '-_' | tr -d '='; }
+TENANT=00000000-0000-0000-0000-000000000000
+SUB=00000000-0000-0000-0000-000000000000
+ACCOUNT="{\"id\":\"$SUB\",\"tenantId\":\"$TENANT\",\"isDefault\":true,\"name\":\"mock\",\"state\":\"Enabled\",\"user\":{\"name\":\"mock@example.com\",\"type\":\"user\"}}"
+case "$*" in
+  *version*) echo '{"azure-cli":"2.70.0","azure-cli-core":"2.70.0","extensions":{}}' ;;
+  *"account show"*) echo "$ACCOUNT" ;;
+  *"account list"*) echo "[$ACCOUNT]" ;;
+  *get-access-token*)
+    HDR=$(b64 '{"alg":"none","typ":"JWT"}')
+    PAY=$(b64 "{\"oid\":\"11111111-1111-1111-1111-111111111111\",\"tid\":\"$TENANT\",\"upn\":\"mock@example.com\",\"exp\":4102444800}")
+    echo "{\"accessToken\":\"$HDR.$PAY.sig\",\"expiresOn\":\"2099-12-31 00:00:00.000000\",\"expires_on\":4102444800,\"subscription\":\"$SUB\",\"tenant\":\"$TENANT\",\"tokenType\":\"Bearer\"}" ;;
+  *) echo '{}' ;;
+esac

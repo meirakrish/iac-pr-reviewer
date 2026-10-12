@@ -1,0 +1,8 @@
+{
+  "description": "External contractor gets roles/owner on the project; a custom deployer role can run VMs as any usable service account (actAs + compute.instances.create).",
+  "risk": { "min": "critical", "max": "critical" },
+  "findings": [
+    { "resource": "google_project_iam_member.contractor_owner", "category": "iam", "minSeverity": "critical" },
+    { "resource": "google_project_iam_custom_role.deployer", "category": "iam", "minSeverity": "high" }
+  ]
+}
