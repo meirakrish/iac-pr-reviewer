@@ -68,6 +68,8 @@ export const FindingSource = z.enum(["precheck", "llm", "both"]);
 export const Finding = LlmFinding.extend({
   source: FindingSource,
   ruleId: z.string().nullable(),
+  /** Set when one finding covers several resources, e.g. every resource in a renamed module. */
+  relatedResources: z.array(z.string()).optional(),
 });
 export type Finding = z.infer<typeof Finding>;
 

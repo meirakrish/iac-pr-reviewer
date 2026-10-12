@@ -80,6 +80,20 @@ export function trimChange(rc: ResourceChange): TrimmedChange {
   return out;
 }
 
+/**
+ * Updates where every changed attribute is only known after apply, typically because it references a resource
+ * that is being recreated. The plan shows nothing concrete about them, so LLM claims about them are guesses.
+ */
+export function opaqueUpdates(changes: ResourceChange[]): Set<string> {
+  const out = new Set<string>();
+  for (const rc of changes) {
+    if (changeKind(rc.change.actions) !== "update") continue;
+    const changed = Object.values(trimChange(rc).changed ?? {});
+    if (changed.length && changed.every((c) => c.after === UNKNOWN)) out.add(rc.address);
+  }
+  return out;
+}
+
 /** Sanitize and shrink changed resources so the plan fits in an LLM prompt. Riskiest actions are kept first. */
 export function trimPlan(changes: ResourceChange[], maxChars = 40_000): TrimmedPlan {
   const sorted = [...changes].sort(
