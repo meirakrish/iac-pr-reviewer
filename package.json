@@ -31,7 +31,7 @@
     "@langchain/anthropic": "^1.5.12",
     "@langchain/core": "^1.2.17",
     "@langchain/openai": "^1.6.2",
-    "@meirakrish/llm-kit": "github:meirakrish/llm-kit#ad3e32db31c7f4fda83d940ef229c1a07d6b7661",
+    "@meirakrish/llm-kit": "https://github.com/meirakrish/llm-kit/releases/download/v0.1.0/meirakrish-llm-kit-0.1.0.tgz",
     "zod": "^4.6.6"
   },
   "devDependencies": {
