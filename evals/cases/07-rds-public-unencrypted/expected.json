@@ -1,0 +1,9 @@
+{
+  "description": "New Postgres instance: publicly accessible, unencrypted, no backups or final snapshot, plaintext password in config.",
+  "risk": { "min": "high", "max": "critical" },
+  "findings": [
+    { "resource": "aws_db_instance.analytics", "category": "encryption", "minSeverity": "high" },
+    { "resource": "aws_db_instance.analytics", "category": "network-exposure", "minSeverity": "high", "llmOnly": true },
+    { "resource": "aws_db_instance.analytics", "category": "data-loss", "minSeverity": "medium", "llmOnly": true }
+  ]
+}

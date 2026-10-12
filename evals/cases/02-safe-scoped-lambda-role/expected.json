@@ -1,0 +1,5 @@
+{
+  "description": "New Lambda execution role with least-privilege, resource-scoped permissions.",
+  "risk": { "min": "low", "max": "medium" },
+  "findings": []
+}

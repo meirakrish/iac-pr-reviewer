@@ -1,0 +1,8 @@
+{
+  "description": "Customer-exports bucket made world-readable via public access block + bucket policy.",
+  "risk": { "min": "high", "max": "critical" },
+  "findings": [
+    { "resource": "aws_s3_bucket_public_access_block.exports", "category": "public-storage", "minSeverity": "high" },
+    { "resource": "aws_s3_bucket_policy.exports", "category": "public-storage", "minSeverity": "high" }
+  ]
+}

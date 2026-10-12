@@ -1,0 +1,7 @@
+{
+  "description": "iam:PassRole + lambda:CreateFunction on * is a known privilege-escalation path (pass an admin role to a new function). The rule-based check only sees Resource * (medium); the LLM should raise it.",
+  "risk": { "min": "high", "max": "critical" },
+  "findings": [
+    { "resource": "aws_iam_policy.deployer", "category": "iam", "minSeverity": "high" }
+  ]
+}
