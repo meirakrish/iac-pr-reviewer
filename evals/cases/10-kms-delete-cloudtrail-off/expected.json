@@ -1,0 +1,8 @@
+{
+  "description": "Deletes the KMS key that encrypts prod data (data becomes unreadable after the deletion window) and disables CloudTrail logging.",
+  "risk": { "min": "critical", "max": "critical" },
+  "findings": [
+    { "resource": "aws_kms_key.data", "category": "data-loss", "minSeverity": "critical" },
+    { "resource": "aws_cloudtrail.main", "minSeverity": "medium", "llmOnly": true }
+  ]
+}

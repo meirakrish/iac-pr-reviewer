@@ -1,0 +1,5 @@
+{
+  "description": "Adds a tag to an existing bucket and creates a log group with retention. Nothing risky.",
+  "risk": { "min": "low", "max": "low" },
+  "findings": []
+}

@@ -1,0 +1,5 @@
+{
+  "description": "Public ALB with 80/443 open to the internet: expected for a load balancer. Should not be escalated.",
+  "risk": { "min": "low", "max": "medium" },
+  "findings": []
+}

@@ -1,0 +1,7 @@
+{
+  "description": "CI role gets a policy with Action * on Resource * (full admin).",
+  "risk": { "min": "critical", "max": "critical" },
+  "findings": [
+    { "resource": "aws_iam_policy.ci_deploy", "category": "iam", "minSeverity": "critical" }
+  ]
+}
