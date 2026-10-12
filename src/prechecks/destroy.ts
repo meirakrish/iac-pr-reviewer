@@ -124,7 +124,7 @@ export const destroyCheck: Precheck = (rc, ctx) => {
             ? "Brief overlap of old and new resource; dependents may see a new ID/ARN."
             : "Downtime between destroy and create; dependents get a new ID/ARN.",
         suggestion: stateful
-          ? "Avoid the replacement (revert the forcing attribute or use `moved`/import), or migrate data explicitly."
+          ? `Revert the change${paths.length ? ` to ${paths.join(", ")}` : ""} if possible. Otherwise plan a data migration: create the new resource alongside the old one, copy the data, then switch over.`
           : "Check whether the forcing attribute change is necessary; consider `create_before_destroy`.",
       }),
     ];

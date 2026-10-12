@@ -77,6 +77,70 @@ describe("mergeReview", () => {
     });
   });
 
+  it("folds LLM findings about resources covered by a multi-resource finding into it", () => {
+    const moduleMove: Finding = {
+      ...pre,
+      resource: "module.old",
+      ruleId: "missing-moved-block",
+      relatedResources: ["module.old.aws_db_instance.this", "module.old.aws_s3_bucket.logs"],
+    };
+    const r = merge(
+      [moduleMove],
+      {
+        riskLevel: "critical",
+        summary: "s",
+        findings: [
+          llmFinding({ resource: "module.old.aws_db_instance.this" }),
+          llmFinding({ resource: "module.old.aws_s3_bucket.logs", category: "data-loss" }),
+        ],
+      },
+      [
+        ["module.old.aws_db_instance.this", "delete"],
+        ["module.old.aws_s3_bucket.logs", "delete"],
+      ],
+    );
+    expect(r.findings).toHaveLength(1);
+    expect(r.findings[0]).toMatchObject({ resource: "module.old", source: "both" });
+  });
+
+  it("drops low-severity notes the LLM adds on its own", () => {
+    const r = merge([], {
+      riskLevel: "low",
+      summary: "s",
+      findings: [
+        llmFinding({ resource: "aws_iam_role.x", category: "other", severity: "low", issue: "Routine tag change." }),
+      ],
+    });
+    expect(r.findings).toEqual([]);
+  });
+
+  it("drops LLM-only claims about updates whose new values are all unknown until apply", () => {
+    const claim = llmFinding({ resource: "aws_iam_role.x", category: "iam", severity: "medium" });
+    const input: MergeInput = {
+      prechecks: [],
+      llm: { riskLevel: "medium", summary: "s", findings: [claim] },
+      llmMeta,
+      stats,
+      actions: new Map(defaultActions),
+      opaque: new Set(["aws_iam_role.x"]),
+    };
+    expect(mergeReview(input).findings).toEqual([]);
+  });
+
+  it("adds an exact computed fix to the summary when the LLM summary leaves it out", () => {
+    const moved: Finding = {
+      ...pre,
+      ruleId: "missing-moved-block",
+      suggestion: "Add a `moved` block with `from = module.a` and `to = module.b`.",
+    };
+    const r = merge([moved], { riskLevel: "critical", summary: "Plan a data migration first.", findings: [] });
+    expect(r.summary).toBe(
+      "Plan a data migration first.\n\n**Fix:** Add a `moved` block with `from = module.a` and `to = module.b`.",
+    );
+    const already = merge([moved], { riskLevel: "critical", summary: "Add a `moved` block instead.", findings: [] });
+    expect(already.summary).toBe("Add a `moved` block instead.");
+  });
+
   it("keeps precheck findings the LLM did not mention", () => {
     const r = merge([pre], { riskLevel: "critical", summary: "s", findings: [] });
     expect(r.findings[0]!.source).toBe("precheck");

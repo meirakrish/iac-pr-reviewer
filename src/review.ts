@@ -1,7 +1,7 @@
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import type { ReviewConfig } from "./config.js";
 import { changedResources, changeStats } from "./plan/load.js";
-import { trimPlan } from "./plan/trim.js";
+import { opaqueUpdates, trimPlan } from "./plan/trim.js";
 import { detectMoves } from "./plan/moves.js";
 import { changeKind, type TerraformPlan } from "./plan/types.js";
 import { runPrechecks } from "./prechecks/index.js";
@@ -65,6 +65,7 @@ export async function reviewPlan(
     llmMeta,
     stats,
     actions: new Map(changes.map((c) => [c.address, changeKind(c.change.actions)])),
+    opaque: opaqueUpdates(changes),
   });
 }
 

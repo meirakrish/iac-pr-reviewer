@@ -102,10 +102,17 @@ describe("missing moved block finding", () => {
       requiredTags: [],
       moves: detectMoves(plan.resource_changes ?? []),
     });
-    const db = findings.find((f) => f.resource === "module.orders_db.aws_db_instance.this")!;
-    expect(db).toMatchObject({ severity: "critical", ruleId: "missing-moved-block", category: "data-loss" });
-    expect(db.issue).toContain("module.orders_database.aws_db_instance.this");
-    expect(db.suggestion).toContain("`from = module.orders_db` and `to = module.orders_database`");
+    // The whole module moved: one finding for the module instead of one per resource.
+    const mod = findings.find((f) => f.resource === "module.orders_db")!;
+    expect(mod).toMatchObject({ severity: "critical", ruleId: "missing-moved-block", category: "data-loss" });
+    expect(mod.relatedResources).toEqual([
+      "module.orders_db.aws_db_instance.this",
+      "module.orders_db.aws_security_group.db",
+    ]);
+    expect(mod.issue).toContain("module.orders_db was renamed to module.orders_database");
+    expect(mod.blastRadius).toContain("aws_db_instance.this");
+    expect(mod.suggestion).toContain("`from = module.orders_db` and `to = module.orders_database`");
+    expect(findings.filter((f) => f.resource.startsWith("module.orders_db."))).toEqual([]);
     const bucket = findings.find((f) => f.resource === "aws_s3_bucket.logs")!;
     expect(bucket.suggestion).toContain("`from = aws_s3_bucket.logs` and `to = aws_s3_bucket.app_logs`");
   });

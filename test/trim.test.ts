@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { changedResources } from "../src/plan/load.js";
-import { applyMask, SENSITIVE, trimPlan, UNKNOWN } from "../src/plan/trim.js";
+import { applyMask, opaqueUpdates, SENSITIVE, trimPlan, UNKNOWN } from "../src/plan/trim.js";
 import { evalPlan, rc } from "./helpers.js";
 
 describe("applyMask", () => {
@@ -21,6 +21,26 @@ describe("applyMask", () => {
 
   it("does not invent keys for sensitive masks", () => {
     expect(applyMask({ name: "x" }, { password: true }, SENSITIVE)).toEqual({ name: "x" });
+  });
+});
+
+describe("opaqueUpdates", () => {
+  it("finds updates whose changed values are all unknown until apply", () => {
+    const opaque = rc("aws_iam_role_policy", {}, ["update"], {
+      before: { policy: "{...}", name: "p" },
+      after: { name: "p" },
+      after_unknown: { policy: true },
+    });
+    const concrete = rc("aws_iam_role_policy", {}, ["update"], {
+      before: { policy: "{...}" },
+      after: { policy: "{changed}" },
+    });
+    expect([
+      ...opaqueUpdates([
+        { ...opaque, address: "a" },
+        { ...concrete, address: "b" },
+      ]),
+    ]).toEqual(["a"]);
   });
 });
 

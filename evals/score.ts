@@ -32,6 +32,20 @@ export interface CaseScore {
   llmOnlyTotal: number;
 }
 
+type ExpectedFinding = z.infer<typeof ExpectedFinding>;
+
+/**
+ * Does an actual finding account for an expected one? A finding that covers several resources (a renamed module)
+ * matches expectations about any of them.
+ */
+function matchesExpected(f: Finding, exp: Pick<ExpectedFinding, "resource" | "category">): boolean {
+  return [f.resource, ...(f.relatedResources ?? [])].some((resource) =>
+    exp.category
+      ? sameIssue({ resource, category: f.category }, { resource: exp.resource, category: exp.category })
+      : resource === exp.resource,
+  );
+}
+
 export function scoreCase(result: ReviewResult, expected: Expected): CaseScore {
   const used = new Set<Finding>();
   const score: CaseScore = {
@@ -50,11 +64,8 @@ export function scoreCase(result: ReviewResult, expected: Expected): CaseScore {
   for (const exp of expected.findings.filter((e) => !e.optional)) {
     const label = `${exp.resource}${exp.category ? `/${exp.category}` : ""}`;
     if (exp.llmOnly) score.llmOnlyTotal++;
-    const candidates = result.findings.filter(
-      (f) =>
-        !used.has(f) &&
-        (exp.category ? sameIssue(f, { resource: exp.resource, category: exp.category }) : f.resource === exp.resource),
-    );
+    // Multi-resource findings may satisfy several expectations, so they're never "used up".
+    const candidates = result.findings.filter((f) => (f.relatedResources || !used.has(f)) && matchesExpected(f, exp));
     const hit = candidates.find((f) => SEVERITY_ORDER[f.severity] >= SEVERITY_ORDER[exp.minSeverity]);
     if (hit) {
       used.add(hit);
@@ -69,10 +80,7 @@ export function scoreCase(result: ReviewResult, expected: Expected): CaseScore {
   }
 
   // Several findings on the same expected resource/category group (e.g. LLM restating a precheck) are not "extra".
-  const explained = (f: Finding) =>
-    expected.findings.some((e) =>
-      e.category ? sameIssue(f, { resource: e.resource, category: e.category }) : f.resource === e.resource,
-    );
+  const explained = (f: Finding) => expected.findings.some((e) => matchesExpected(f, e));
   score.extra = result.findings
     .filter((f) => !used.has(f) && !explained(f) && SEVERITY_ORDER[f.severity] >= SEVERITY_ORDER.medium)
     .map((f) => `${f.resource}/${f.category} (${f.severity}, ${f.source})`);

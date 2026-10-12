@@ -7,7 +7,9 @@ import { ingressCheck } from "../src/prechecks/ingress.js";
 import { publicStorageCheck } from "../src/prechecks/public-storage.js";
 import { tagsCheck } from "../src/prechecks/tags.js";
 import { destroyCheck } from "../src/prechecks/destroy.js";
+import { dataProtectionCheck } from "../src/prechecks/data-protection.js";
 import { evalPlan, rc } from "./helpers.js";
+import type { Action } from "../src/plan/types.js";
 
 const ctx = { requiredTags: [] };
 const policy = (...Statement: object[]) => JSON.stringify({ Version: "2012-10-17", Statement });
@@ -393,5 +395,76 @@ describe("GCP rules", () => {
         requiredTags: ["Team"],
       }),
     ).toEqual([]);
+  });
+});
+
+describe("dataProtectionCheck", () => {
+  const change = (type: string, before: object, after: object, actions: Action[] = ["update"]) => ({
+    ...rc(type, after as Record<string, unknown>, actions),
+    change: { actions, before, after },
+  });
+
+  it("flags point-in-time recovery and deletion protection being turned off", () => {
+    const [f] = dataProtectionCheck(
+      change(
+        "aws_dynamodb_table",
+        { point_in_time_recovery: [{ enabled: true }], deletion_protection_enabled: true },
+        { point_in_time_recovery: [{ enabled: false }], deletion_protection_enabled: false },
+      ),
+      ctx,
+    );
+    expect(f).toMatchObject({ severity: "high", category: "data-loss", ruleId: "data-protection-disabled" });
+    expect(f!.issue).toBe("Turns off point-in-time recovery and deletion protection.");
+  });
+
+  it("flags a replacement that drops a protection the current resource has", () => {
+    const [f] = dataProtectionCheck(
+      change(
+        "aws_dynamodb_table",
+        { point_in_time_recovery: [{ enabled: true }] },
+        { point_in_time_recovery: [{ enabled: false }] },
+        ["delete", "create"],
+      ),
+      ctx,
+    );
+    expect(f!.issue).toContain("replacement is created without point-in-time recovery");
+  });
+
+  it("covers RDS backups, S3 versioning and GCP", () => {
+    expect(
+      dataProtectionCheck(
+        change("aws_db_instance", { backup_retention_period: 7 }, { backup_retention_period: 0 }),
+        ctx,
+      )[0]!.severity,
+    ).toBe("high");
+    expect(
+      dataProtectionCheck(
+        change(
+          "aws_s3_bucket_versioning",
+          { versioning_configuration: [{ status: "Enabled" }] },
+          { versioning_configuration: [{ status: "Suspended" }] },
+        ),
+        ctx,
+      ),
+    ).toHaveLength(1);
+    const sql = (enabled: boolean) => ({ settings: [{ backup_configuration: [{ enabled }] }] });
+    expect(dataProtectionCheck(change("google_sql_database_instance", sql(true), sql(false)), ctx)).toHaveLength(1);
+  });
+
+  it("ignores settings that were already off, turned on, unknown, or on new resources", () => {
+    expect(
+      dataProtectionCheck(
+        change("aws_db_instance", { deletion_protection: false }, { deletion_protection: false }),
+        ctx,
+      ),
+    ).toEqual([]);
+    expect(
+      dataProtectionCheck(
+        change("aws_db_instance", { deletion_protection: false }, { deletion_protection: true }),
+        ctx,
+      ),
+    ).toEqual([]);
+    expect(dataProtectionCheck(change("aws_db_instance", { deletion_protection: true }, {}), ctx)).toEqual([]);
+    expect(dataProtectionCheck(rc("aws_db_instance", { deletion_protection: false }), ctx)).toEqual([]);
   });
 });
