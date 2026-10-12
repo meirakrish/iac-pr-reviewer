@@ -7,7 +7,7 @@
 #   ./demo.sh down               stop LocalStack and delete the working copy
 #
 # Scenarios live in scenarios/<name>/ and contain only the files that PR changes; they are copied over a
-# fresh copy of baseline/ each time. Options (LLM provider, --no-llm, ...) go through IAC_REVIEW_* env vars.
+# fresh copy of baseline/ each time. Options go through env vars: LLM_* for the model, IAC_REVIEW_* for the review (e.g. IAC_REVIEW_NO_LLM).
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)

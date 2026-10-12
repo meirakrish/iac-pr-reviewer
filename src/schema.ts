@@ -1,16 +1,8 @@
 import { z } from "zod";
-import { toJsonSchema } from "@langchain/core/utils/json_schema";
+import { LlmRunInfo, maxSeverity, Severity, SEVERITY_ORDER, type SchemaLimits } from "@meirakrish/llm-kit";
 
-export const Severity = z.enum(["low", "medium", "high", "critical"]);
-export type Severity = z.infer<typeof Severity>;
-
-export const SEVERITY_ORDER: Record<Severity, number> = { low: 0, medium: 1, high: 2, critical: 3 };
-
-export function maxSeverity(levels: Iterable<Severity>, floor: Severity = "low"): Severity {
-  let max = floor;
-  for (const l of levels) if (SEVERITY_ORDER[l] > SEVERITY_ORDER[max]) max = l;
-  return max;
-}
+// The severity scale is shared with the other llm-kit tools.
+export { maxSeverity, Severity, SEVERITY_ORDER };
 
 export const Category = z.enum([
   "destroy",
@@ -48,20 +40,17 @@ export type LlmReview = z.infer<typeof LlmReviewSchema>;
 export const TEXT_LIMITS = { summary: 700, field: 400, resource: 200, findings: 20 };
 
 /**
- * JSON schema for LlmReviewSchema with length limits on free-text fields. Constrained decoders
- * (Ollama/llama.cpp grammars) enforce these, which stops small models from writing one string forever.
- * Not used for hosted providers: OpenAI strict mode does not accept maxLength.
+ * Length limits for the LLM's free-text fields. Constrained decoders (Ollama/llama.cpp grammars) enforce them,
+ * which stops small models from writing one string forever; llm-kit applies them only where they are enforced.
  */
-export function boundedReviewJsonSchema(): Record<string, any> {
-  // Deep copy: LangChain caches and shares the converted schema object, so it must not be mutated.
-  const js = structuredClone(toJsonSchema(LlmReviewSchema)) as Record<string, any>;
-  js.properties.summary.maxLength = TEXT_LIMITS.summary;
-  const findings = js.properties.findings;
-  findings.maxItems = TEXT_LIMITS.findings;
-  for (const k of ["issue", "blastRadius", "suggestion"]) findings.items.properties[k].maxLength = TEXT_LIMITS.field;
-  findings.items.properties.resource.maxLength = TEXT_LIMITS.resource;
-  return js;
-}
+export const REVIEW_LIMITS: SchemaLimits = {
+  summary: TEXT_LIMITS.summary,
+  findings: TEXT_LIMITS.findings,
+  "findings[].resource": TEXT_LIMITS.resource,
+  "findings[].issue": TEXT_LIMITS.field,
+  "findings[].blastRadius": TEXT_LIMITS.field,
+  "findings[].suggestion": TEXT_LIMITS.field,
+};
 
 export const FindingSource = z.enum(["precheck", "llm", "both"]);
 
@@ -88,11 +77,6 @@ export const ReviewResult = z.object({
   summary: z.string(),
   findings: z.array(Finding),
   stats: ChangeStats,
-  llm: z.object({
-    provider: z.string(),
-    model: z.string(),
-    ok: z.boolean(),
-    error: z.string().nullable(),
-  }),
+  llm: LlmRunInfo,
 });
 export type ReviewResult = z.infer<typeof ReviewResult>;

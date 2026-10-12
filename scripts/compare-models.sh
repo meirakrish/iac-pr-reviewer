@@ -11,7 +11,7 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 
 RUNS=${RUNS:-2}
-NUM_CTX=${IAC_REVIEW_NUM_CTX:-16384}
+NUM_CTX=${LLM_NUM_CTX:-16384}
 OUT=evals/results/compare-$(date +%Y%m%d-%H%M%S).md
 ROWS=()
 
@@ -73,7 +73,7 @@ for model in "$@"; do
   for run in $(seq "$RUNS"); do
     ollama stop "$model" >/dev/null 2>&1
     echo "   eval run $run/$RUNS (cold start)..."
-    result=$(IAC_REVIEW_NUM_CTX=$NUM_CTX npm run eval -- --model "$model" 2>&1 | grep -oE 'results: .*' | cut -d' ' -f2)
+    result=$(LLM_NUM_CTX=$NUM_CTX npm run eval -- --model "$model" 2>&1 | grep -oE 'results: .*' | cut -d' ' -f2)
     [[ -n "$result" ]] && files+=("$result")
   done
   [[ ${#files[@]} -gt 0 ]] || {
