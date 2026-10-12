@@ -91,7 +91,7 @@ If a model looks better than the default, run it through the LocalStack demo, wh
 ```
 
 ```bash
-IAC_REVIEW_MODEL=<model> ./examples/localstack/demo.sh all
+LLM_MODEL=<model> ./examples/localstack/demo.sh all
 ```
 
 Run `down` first: after a WSL restart, the saved Terraform state no longer matches LocalStack's (empty) memory. Expected results: `safe` LOW with no findings, `risky` CRITICAL with 5 findings, `rename` CRITICAL with one finding and the `moved` fix, `rename-moved` LOW.

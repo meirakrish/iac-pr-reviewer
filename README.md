@@ -160,7 +160,7 @@ The provider is picked automatically:
 2. Otherwise, if `OPENAI_API_KEY` is set, it uses **OpenAI** (`gpt-5-mini`).
 3. Otherwise it uses local **Ollama** (`qwen3.5:9b`, about 6 GB of GPU memory).
 
-To force a choice, use `--provider` and `--model` (or `IAC_REVIEW_PROVIDER` / `IAC_REVIEW_MODEL`):
+To force a choice, use `--provider` and `--model` (or `LLM_PROVIDER` / `LLM_MODEL`):
 
 ```bash
 iac-review --plan plan.json --provider ollama --model qwen2.5:7b-instruct
@@ -172,21 +172,30 @@ If the LLM is unavailable (Ollama not running, API error, timeout), the review *
 
 ### Environment variables
 
-The review options can also be set through the environment, which is handy for CI. Command-line flags take precedence.
+Settings can also come from the environment, which is handy for CI. Command-line flags take precedence.
+
+The LLM settings are shared with [k8s-devops-agent](https://github.com/meirakrish/k8s-devops-agent) through [llm-kit](https://github.com/meirakrish/llm-kit), so one environment configures both tools:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `IAC_REVIEW_PROVIDER` | auto | Same as `--provider` |
-| `IAC_REVIEW_MODEL` | per provider | Same as `--model` |
+| `LLM_PROVIDER` | auto | Same as `--provider` |
+| `LLM_MODEL` | per provider | Same as `--model` |
+| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | | API keys for hosted providers |
+| `OLLAMA_HOST` | `http://localhost:11434` | Ollama server address (`host:port` or a full URL) |
+| `LLM_NUM_CTX` | `16384` | Ollama context window (tokens). Lower it if the GPU runs out of memory. |
+| `LLM_MAX_OUTPUT_TOKENS` | `4096` | Cap on LLM output; stops a runaway generation quickly. |
+| `LLM_TIMEOUT_MS` | `180000` | LLM request timeout |
+
+Review settings:
+
+| Variable | Default | Purpose |
+|---|---|---|
 | `IAC_REVIEW_FAIL_ON` | `none` | Same as `--fail-on` |
 | `IAC_REVIEW_NO_LLM` | | `true`, `1` or `yes` = same as `--no-llm` |
 | `IAC_REVIEW_REQUIRED_TAGS` | | Same as `--required-tags` |
-| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | | API keys for hosted providers |
-| `OLLAMA_HOST` | `http://localhost:11434` | Ollama server address (`host:port` or a full URL) |
-| `IAC_REVIEW_NUM_CTX` | `16384` | Ollama context window (tokens). Lower it if the GPU runs out of memory. |
 | `IAC_REVIEW_MAX_PLAN_CHARS` | `40000` | Maximum plan size sent to the LLM, in characters. Deletes and replacements are kept first. |
-| `IAC_REVIEW_MAX_OUTPUT_TOKENS` | `4096` | Cap on LLM output; stops a runaway generation quickly. |
-| `IAC_REVIEW_TIMEOUT_MS` | `180000` | LLM request timeout |
+
+The old names `IAC_REVIEW_PROVIDER`, `IAC_REVIEW_MODEL`, `IAC_REVIEW_NUM_CTX`, `IAC_REVIEW_MAX_OUTPUT_TOKENS` and `IAC_REVIEW_TIMEOUT_MS` still work but print a deprecation warning.
 
 ---
 
@@ -337,7 +346,7 @@ To compare several local models at once (download, GPU-fit check, two cold eval 
 | Problem | Fix |
 |---|---|
 | `AI review unavailable (could not connect…)` | Ollama isn't running. Start it (`ollama serve`, or `sudo systemctl start ollama`), or use `--no-llm`. |
-| `cudaMalloc failed: out of memory` | The GPU doesn't have enough free memory to load the model. Close other GPU-heavy apps (browsers can use a lot) and retry, or lower the context with `IAC_REVIEW_NUM_CTX=8192`. |
+| `cudaMalloc failed: out of memory` | The GPU doesn't have enough free memory to load the model. Close other GPU-heavy apps (browsers can use a lot) and retry, or lower the context with `LLM_NUM_CTX=8192`. |
 | `ollama pull` fails with `Error: EOF` | An interrupted earlier download left partial files. Delete the `*-partial*` files in Ollama's models folder (on Linux: `/usr/share/ollama/.ollama/models/blobs/`, needs sudo) and pull again. |
 | `Plan is not valid JSON` | You passed the binary plan. Run `terraform show -json plan.tfplan > plan.json` first. |
 | `iac-review: command not found` | Run `npm run build && npm link` in the repo, or use `npx tsx src/cli.ts` instead. |
@@ -354,7 +363,7 @@ src/
   config.ts         flags / env vars / defaults
   plan/             load the plan JSON, detect renames, trim it and redact secrets for the LLM
   prechecks/        rule-based checks (one file per check)
-  llm/              provider setup (Ollama/Anthropic/OpenAI) and the prompt
+  llm/              the review prompt and call (providers, retries and limits come from llm-kit)
   report/           merge rule + LLM findings, render markdown
 test/               unit tests (vitest)
 evals/

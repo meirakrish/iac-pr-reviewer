@@ -1,4 +1,5 @@
-import { SEVERITY_ORDER, type Finding, type ReviewResult, type Severity } from "../schema.js";
+import { meetsThreshold, type FailOn } from "@meirakrish/llm-kit";
+import type { Finding, ReviewResult, Severity } from "../schema.js";
 
 /** Hidden marker used to find and update our own PR comment. */
 export const COMMENT_MARKER = "<!-- iac-pr-reviewer -->";
@@ -7,7 +8,7 @@ const BADGE_COLOR: Record<Severity, string> = { low: "brightgreen", medium: "yel
 const ICON: Record<Severity, string> = { low: "🟢", medium: "🟡", high: "🟠", critical: "🔴" };
 const SOURCE_LABEL: Record<Finding["source"], string> = { precheck: "rule", llm: "AI", both: "rule + AI" };
 
-export function renderMarkdown(r: ReviewResult, opts: { failOn?: Severity | "none" } = {}): string {
+export function renderMarkdown(r: ReviewResult, opts: { failOn?: FailOn } = {}): string {
   const out: string[] = [COMMENT_MARKER];
   out.push(`## ${ICON[r.riskLevel]} Terraform plan review — risk: **${r.riskLevel.toUpperCase()}**`);
   out.push("");
@@ -20,7 +21,7 @@ export function renderMarkdown(r: ReviewResult, opts: { failOn?: Severity | "non
       (r.stats.moved ? ` · ${r.stats.moved} moved` : ""),
   );
 
-  if (opts.failOn && opts.failOn !== "none" && SEVERITY_ORDER[r.riskLevel] >= SEVERITY_ORDER[opts.failOn]) {
+  if (opts.failOn && meetsThreshold(r.riskLevel, opts.failOn)) {
     out.push("");
     out.push(
       `> [!CAUTION]\n> Risk level is at or above the configured threshold (\`${opts.failOn}\`); this check is failing.`,
@@ -48,7 +49,7 @@ export function renderMarkdown(r: ReviewResult, opts: { failOn?: Severity | "non
 
   out.push("", "---");
   const llmNote = r.llm.ok
-    ? `AI review by \`${r.llm.provider}/${r.llm.model}\``
+    ? `AI review by \`${r.llm.provider}/${r.llm.model}\`${usageNote(r.llm)}`
     : r.llm.provider === "none"
       ? "AI review disabled; rule-based checks only"
       : r.llm.error === null
@@ -72,4 +73,16 @@ function findingsTable(findings: Finding[]): string {
 
 function escapeCell(s: string): string {
   return s.replace(/\|/g, "\\|").replace(/\r?\n/g, " ").trim();
+}
+
+/** " (2 calls, 5,321 tokens, 4.2s)" when the run recorded usage; empty otherwise. */
+function usageNote(llm: ReviewResult["llm"]): string {
+  const parts: string[] = [];
+  if (llm.usage?.calls) {
+    const tokens = llm.usage.promptTokens + llm.usage.outputTokens;
+    if (llm.usage.calls > 1) parts.push(`${llm.usage.calls} calls`);
+    if (tokens) parts.push(`${tokens.toLocaleString("en-US")} tokens`);
+  }
+  if (llm.durationMs !== undefined) parts.push(`${(llm.durationMs / 1000).toFixed(1)}s`);
+  return parts.length ? ` (${parts.join(", ")})` : "";
 }

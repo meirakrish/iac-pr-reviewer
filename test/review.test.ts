@@ -3,9 +3,9 @@ import type { BaseChatModel } from "@langchain/core/language_models/chat_models"
 import { resolveConfig } from "../src/config.js";
 import { exceedsThreshold, reviewPlan } from "../src/review.js";
 import { renderMarkdown, COMMENT_MARKER } from "../src/report/markdown.js";
-import { boundedReviewJsonSchema, LlmReviewSchema, type LlmReview } from "../src/schema.js";
+import { LlmReviewSchema, REVIEW_LIMITS, type LlmReview } from "../src/schema.js";
 import { toJsonSchema } from "@langchain/core/utils/json_schema";
-import { trimToSentence } from "../src/llm/review.js";
+import { boundedJsonSchema } from "@meirakrish/llm-kit";
 import { evalPlan } from "./helpers.js";
 
 /**
@@ -28,6 +28,7 @@ function fakeModel(...results: (LlmReview | Error)[]): BaseChatModel & { calls: 
 }
 
 const config = resolveConfig({ provider: "ollama", failOn: "high" }, {});
+const quiet = () => {};
 
 describe("reviewPlan", () => {
   it("merges LLM output with prechecks", async () => {
@@ -51,6 +52,7 @@ describe("reviewPlan", () => {
       expect.objectContaining({ source: "both", severity: "high", ruleId: "iam-privilege-escalation" }),
     ]);
     expect(r.llm).toMatchObject({ ok: true, provider: "ollama" });
+    expect(r.llm.durationMs).toBeGreaterThanOrEqual(0);
   });
 
   it("degrades to prechecks only when the LLM fails", async () => {
@@ -119,15 +121,30 @@ describe("resolveConfig", () => {
       model: "claude-sonnet-5-5",
     });
     expect(
-      resolveConfig({ provider: "ollama" }, { ANTHROPIC_API_KEY: "x", IAC_REVIEW_MODEL: "llama3" }).llm,
+      resolveConfig({ provider: "ollama" }, { ANTHROPIC_API_KEY: "x", IAC_REVIEW_MODEL: "llama3" }, quiet).llm,
     ).toMatchObject({ provider: "ollama", model: "llama3" });
     expect(resolveConfig({}, { IAC_REVIEW_REQUIRED_TAGS: "Team, Owner" }).requiredTags).toEqual(["Team", "Owner"]);
   });
 
   it("accepts OLLAMA_HOST with or without a scheme", () => {
-    expect(resolveConfig({}, { OLLAMA_HOST: "127.0.0.1:11434" }).llm?.baseUrl).toBe("http://127.0.0.1:11434");
-    expect(resolveConfig({}, { OLLAMA_HOST: "https://ollama.internal" }).llm?.baseUrl).toBe("https://ollama.internal");
-    expect(resolveConfig({}, {}).llm?.baseUrl).toBeUndefined();
+    expect(resolveConfig({}, { OLLAMA_HOST: "127.0.0.1:11434" }).llm?.ollamaHost).toBe("http://127.0.0.1:11434");
+    expect(resolveConfig({}, { OLLAMA_HOST: "https://ollama.internal" }).llm?.ollamaHost).toBe(
+      "https://ollama.internal",
+    );
+    expect(resolveConfig({}, {}).llm?.ollamaHost).toBe("http://localhost:11434");
+  });
+
+  it("reads the shared LLM_* settings, and the old IAC_REVIEW_* names with a warning", () => {
+    expect(resolveConfig({}, { LLM_MODEL: "llama3", LLM_NUM_CTX: "8192" }).llm).toMatchObject({
+      model: "llama3",
+      numCtx: 8192,
+    });
+    const warnings: string[] = [];
+    const legacy = resolveConfig({}, { IAC_REVIEW_NUM_CTX: "8192" }, (m) => warnings.push(m));
+    expect(legacy.llm?.numCtx).toBe(8192);
+    expect(warnings).toEqual(["IAC_REVIEW_NUM_CTX is deprecated; use LLM_NUM_CTX"]);
+    const both = resolveConfig({}, { IAC_REVIEW_MODEL: "old", LLM_MODEL: "new" }, quiet);
+    expect(both.llm?.model).toBe("new");
   });
 
   it("rejects invalid values", () => {
@@ -136,22 +153,11 @@ describe("resolveConfig", () => {
   });
 });
 
-describe("trimToSentence", () => {
-  it("trims text cut off at the limit back to the last full sentence", () => {
-    const cut = "First sentence. Second sentence is fine. Third one got cut off by the length lim";
-    expect(trimToSentence(cut, cut.length)).toBe("First sentence. Second sentence is fine.");
-  });
-
-  it("leaves short or complete text alone", () => {
-    expect(trimToSentence("Use TLS 1.2", 400)).toBe("Use TLS 1.2");
-    expect(trimToSentence("Done.", 5)).toBe("Done.");
-  });
-});
-
-describe("boundedReviewJsonSchema", () => {
-  it("adds length limits without mutating the schema shared with hosted providers", () => {
-    const bounded = boundedReviewJsonSchema();
+describe("REVIEW_LIMITS", () => {
+  it("bounds the review's free-text fields without mutating the schema shared with hosted providers", () => {
+    const bounded = boundedJsonSchema(LlmReviewSchema, REVIEW_LIMITS);
     expect(bounded.properties.summary.maxLength).toBe(700);
+    expect(bounded.properties.findings.maxItems).toBe(20);
     expect(bounded.properties.findings.items.properties.issue.maxLength).toBe(400);
     expect((toJsonSchema(LlmReviewSchema) as any).properties.summary.maxLength).toBeUndefined();
   });
