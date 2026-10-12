@@ -1,7 +1,5 @@
 {
   "description": "Security group opens SSH (22) to 0.0.0.0/0.",
   "risk": { "min": "critical", "max": "critical" },
-  "findings": [
-    { "resource": "aws_security_group.bastion", "category": "network-exposure", "minSeverity": "critical" }
-  ]
+  "findings": [{ "resource": "aws_security_group.bastion", "category": "network-exposure", "minSeverity": "critical" }]
 }

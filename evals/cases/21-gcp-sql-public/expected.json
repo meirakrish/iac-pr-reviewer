@@ -4,6 +4,11 @@
   "findings": [
     { "resource": "google_sql_database_instance.analytics", "category": "network-exposure", "minSeverity": "critical" },
     { "resource": "google_sql_database_instance.analytics", "category": "encryption", "minSeverity": "medium" },
-    { "resource": "google_sql_database_instance.analytics", "category": "data-loss", "minSeverity": "medium", "llmOnly": true }
+    {
+      "resource": "google_sql_database_instance.analytics",
+      "category": "data-loss",
+      "minSeverity": "medium",
+      "llmOnly": true
+    }
   ]
 }

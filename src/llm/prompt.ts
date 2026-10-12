@@ -33,11 +33,7 @@ Instructions:
    riskLevel must be at least as severe as your most severe finding.
 7. Keep each text field short and concrete: 1-2 sentences.`;
 
-export function buildUserMessage(input: {
-  stats: ChangeStats;
-  prechecks: Finding[];
-  plan: TrimmedPlan;
-}): string {
+export function buildUserMessage(input: { stats: ChangeStats; prechecks: Finding[]; plan: TrimmedPlan }): string {
   const payload = {
     // Only mention moves when there are some: keeps the prompt for ordinary plans unchanged.
     stats: input.stats.moved ? input.stats : { ...input.stats, moved: undefined },

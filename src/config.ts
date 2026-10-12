@@ -70,7 +70,7 @@ function resolveLlm(input: ConfigInput, env: Env): LlmConfig {
   return {
     provider: p,
     model: input.model ?? env.IAC_REVIEW_MODEL ?? DEFAULT_MODELS[p],
-    baseUrl: input.baseUrl ?? env.OLLAMA_HOST ?? undefined,
+    baseUrl: normalizeHost(input.baseUrl ?? env.OLLAMA_HOST),
     numCtx: Number(input.numCtx ?? env.IAC_REVIEW_NUM_CTX ?? 16_384),
     maxOutputTokens: Number(input.maxOutputTokens ?? env.IAC_REVIEW_MAX_OUTPUT_TOKENS ?? 4096),
     timeoutMs: Number(input.timeoutMs ?? env.IAC_REVIEW_TIMEOUT_MS ?? 180_000),
@@ -84,8 +84,17 @@ function detectProvider(env: Env): Provider {
   return "ollama";
 }
 
+/** Ollama's own OLLAMA_HOST is often "host:port" without a scheme; HTTP clients need a full URL. */
+function normalizeHost(host: string | undefined): string | undefined {
+  if (!host) return undefined;
+  return /^https?:\/\//.test(host) ? host : `http://${host}`;
+}
+
 function splitList(v: string | undefined): string[] {
-  return (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  return (v ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 function isTruthy(v: string | undefined): boolean {

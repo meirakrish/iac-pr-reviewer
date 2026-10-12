@@ -47,8 +47,12 @@ function fill(values, unknown, shapes, type) {
 /** State marks sensitive values as attribute paths; derive them from the plan's sensitive_values shape. */
 function sensitivePaths(shape, path = []) {
   if (shape === true) return [path];
-  if (Array.isArray(shape)) return shape.flatMap((v, i) => sensitivePaths(v, [...path, { type: "index", value: { value: i, type: "number" } }]));
-  if (shape && typeof shape === "object") return Object.entries(shape).flatMap(([k, v]) => sensitivePaths(v, [...path, { type: "get_attr", value: k }]));
+  if (Array.isArray(shape))
+    return shape.flatMap((v, i) =>
+      sensitivePaths(v, [...path, { type: "index", value: { value: i, type: "number" } }]),
+    );
+  if (shape && typeof shape === "object")
+    return Object.entries(shape).flatMap(([k, v]) => sensitivePaths(v, [...path, { type: "get_attr", value: k }]));
   return [];
 }
 
@@ -81,7 +85,14 @@ walk(plan.planned_values.root_module);
 
 process.stdout.write(
   JSON.stringify(
-    { version: 4, terraform_version: plan.terraform_version, serial: 1, lineage: "6a0c4d1e-eval-from-plan-000000000000", outputs: {}, resources: [...resources.values()] },
+    {
+      version: 4,
+      terraform_version: plan.terraform_version,
+      serial: 1,
+      lineage: "6a0c4d1e-eval-from-plan-000000000000",
+      outputs: {},
+      resources: [...resources.values()],
+    },
     null,
     1,
   ) + "\n",

@@ -24,7 +24,11 @@ export const tagsCheck: Precheck = (rc, ctx) => {
   if (defaultsUnknown && Object.keys(tags).length === 0) return [];
 
   // GCP label keys must be lowercase, so compare case-insensitively there.
-  const keys = new Set(Object.entries(tags).filter(([, v]) => v !== "").map(([k]) => (gcp ? k.toLowerCase() : k)));
+  const keys = new Set(
+    Object.entries(tags)
+      .filter(([, v]) => v !== "")
+      .map(([k]) => (gcp ? k.toLowerCase() : k)),
+  );
   const missing = ctx.requiredTags.length
     ? ctx.requiredTags.filter((t) => !keys.has(gcp ? t.toLowerCase() : t))
     : keys.size === 0

@@ -1,4 +1,13 @@
-import { maxSeverity, SEVERITY_ORDER, type Category, type ChangeStats, type Finding, type LlmFinding, type LlmReview, type ReviewResult } from "../schema.js";
+import {
+  maxSeverity,
+  SEVERITY_ORDER,
+  type Category,
+  type ChangeStats,
+  type Finding,
+  type LlmFinding,
+  type LlmReview,
+  type ReviewResult,
+} from "../schema.js";
 import type { ChangeKind } from "../plan/types.js";
 import { sameIssue } from "./match.js";
 
@@ -13,18 +22,28 @@ export interface MergeInput {
 
 const LIFECYCLE: Category[] = ["destroy", "replace"];
 
-/** Reject LLM findings that cannot be true: unknown resources, or destroy/replace claims about resources not being destroyed. */
+/**
+ * Reject LLM findings that cannot be true: resources that aren't in the plan,
+ * or destroy/replace claims about resources that aren't being destroyed.
+ */
 function plausible(f: LlmFinding, actions: Map<string, ChangeKind>): boolean {
   const action = actions.get(f.resource);
   if (!action) return false;
-  if (LIFECYCLE.includes(f.category) && action !== "delete" && action !== "replace" && action !== "forget") return false;
+  if (LIFECYCLE.includes(f.category) && action !== "delete" && action !== "replace" && action !== "forget")
+    return false;
   return true;
 }
 
-/** Rules whose suggestion is an exact, computed fix (e.g. the precise `moved` block); the LLM's wording must not replace it. */
+/**
+ * Rules whose suggestion is an exact, computed fix (e.g. the precise `moved` block).
+ * The LLM's wording must never replace it.
+ */
 const EXACT_FIX_RULES = new Set(["missing-moved-block"]);
 
-/** Small models sometimes put a bare severity word ("High") in free-text fields; don't let that replace a rule's explanation. */
+/**
+ * Small models sometimes put a bare severity word ("High") in free-text fields.
+ * Such text must not replace a rule's explanation.
+ */
 function substantive(text: string): boolean {
   return text.trim().split(/\s+/).length >= 4;
 }
@@ -46,9 +65,11 @@ export function mergeReview({ prechecks, llm, llmMeta, stats, actions }: MergeIn
       ...pre,
       source: "both",
       severity: maxSeverity([pre.severity, match.severity]),
-      // Keep the deterministic issue text (it is exact), take the LLM's context-aware impact and fix.
+      // Keep the rule's exact issue text. Take the LLM's impact and fix when they're substantive,
+      // except for rules whose fix is computed (see EXACT_FIX_RULES).
       blastRadius: substantive(match.blastRadius) ? match.blastRadius : pre.blastRadius,
-      suggestion: !EXACT_FIX_RULES.has(pre.ruleId ?? "") && substantive(match.suggestion) ? match.suggestion : pre.suggestion,
+      suggestion:
+        !EXACT_FIX_RULES.has(pre.ruleId ?? "") && substantive(match.suggestion) ? match.suggestion : pre.suggestion,
     };
   });
 
@@ -62,7 +83,9 @@ export function mergeReview({ prechecks, llm, llmMeta, stats, actions }: MergeIn
     findings.push({ ...f, source: "llm", ruleId: null });
   }
 
-  findings.sort((a, b) => SEVERITY_ORDER[b.severity] - SEVERITY_ORDER[a.severity] || a.resource.localeCompare(b.resource));
+  findings.sort(
+    (a, b) => SEVERITY_ORDER[b.severity] - SEVERITY_ORDER[a.severity] || a.resource.localeCompare(b.resource),
+  );
 
   const riskLevel = maxSeverity([...(llm ? [llm.riskLevel] : []), ...findings.map((f) => f.severity)]);
   return {
@@ -81,10 +104,14 @@ function fallbackSummary(stats: ChangeStats, findings: Finding[]): string {
       ? `No infrastructure changes: ${stats.moved} resource${stats.moved === 1 ? " is" : "s are"} only renamed via \`moved\` blocks.`
       : "No infrastructure changes in this plan.";
   }
-  const parts = (["create", "update", "replace", "delete"] as const).filter((k) => stats[k] > 0).map((k) => `${stats[k]} to ${k}`);
+  const parts = (["create", "update", "replace", "delete"] as const)
+    .filter((k) => stats[k] > 0)
+    .map((k) => `${stats[k]} to ${k}`);
   const serious = findings.filter((f) => SEVERITY_ORDER[f.severity] >= SEVERITY_ORDER.high).length;
-  return `This plan changes ${total} resource${total === 1 ? "" : "s"} (${parts.join(", ")}). ` +
+  return (
+    `This plan changes ${total} resource${total === 1 ? "" : "s"} (${parts.join(", ")}). ` +
     (findings.length
       ? `Rule-based checks found ${findings.length} issue${findings.length === 1 ? "" : "s"}${serious ? `, ${serious} of them high or critical` : ""}.`
-      : "Rule-based checks found no issues.");
+      : "Rule-based checks found no issues.")
+  );
 }

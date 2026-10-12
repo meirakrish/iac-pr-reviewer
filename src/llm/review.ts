@@ -1,6 +1,13 @@
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { boundedReviewJsonSchema, LlmReviewSchema, TEXT_LIMITS, type ChangeStats, type Finding, type LlmReview } from "../schema.js";
+import {
+  boundedReviewJsonSchema,
+  LlmReviewSchema,
+  TEXT_LIMITS,
+  type ChangeStats,
+  type Finding,
+  type LlmReview,
+} from "../schema.js";
 import type { TrimmedPlan } from "../plan/trim.js";
 import { buildUserMessage, SYSTEM_PROMPT } from "./prompt.js";
 
@@ -22,14 +29,21 @@ export async function llmReview(
       return tidy(LlmReviewSchema.parse(raw));
     } catch (err) {
       if (attempt >= 2 || isTransportError(err) || signal?.aborted) throw err;
-      opts.log?.(`LLM returned unusable output, retrying once: ${(err as Error).message?.split("\n")[0]?.slice(0, 120)}`);
+      opts.log?.(
+        `LLM returned unusable output, retrying once: ${(err as Error).message?.split("\n")[0]?.slice(0, 120)}`,
+      );
     }
   }
 }
 
 function isTransportError(err: unknown): boolean {
   const e = err as { name?: string; cause?: { code?: string }; message?: string };
-  return e?.name === "AbortError" || e?.name === "TimeoutError" || Boolean(e?.cause?.code) || /fetch failed|ECONNREFUSED|ENOTFOUND/.test(e?.message ?? "");
+  return (
+    e?.name === "AbortError" ||
+    e?.name === "TimeoutError" ||
+    Boolean(e?.cause?.code) ||
+    /fetch failed|ECONNREFUSED|ENOTFOUND/.test(e?.message ?? "")
+  );
 }
 
 /** Text cut off by a length limit ends mid-sentence; trim it back to the last complete sentence. */

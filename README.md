@@ -27,28 +27,28 @@ iac-review --plan plan.json
 > | 🟠 high | `aws_db_instance.analytics` | The database is publicly accessible, which exposes it to potential unauthorized access. | AI |
 > | 🟠 high | `aws_db_instance.analytics` | `backup_retention_period` is 0 and `skip_final_snapshot` is `true`: data recovery is impossible if the database is deleted. | AI |
 
-(The real output also has "Blast radius" and "Suggestion" columns.)
+(Abridged: the real report also has a risk badge and "Blast radius" and "Suggestion" columns.)
 
 ---
 
 ## How it works
 
 ```mermaid
-flowchart LR
-    A["Terraform plan<br/>(JSON)"] --> B["Load & trim<br/>changed resources only<br/>secrets redacted"]
-    B --> C["Rule-based checks<br/>no LLM"]
+flowchart TD
+    A["Terraform plan (JSON)"] --> B["Load & trim<br/>changed resources only, secrets redacted"]
+    B --> C["Rule-based checks<br/>deterministic, no LLM"]
     B --> D["LLM review<br/>Ollama / Anthropic / OpenAI"]
-    C -- findings --> D
-    C --> E["Merge<br/>with guardrails"]
+    C -- "rule findings" --> D
+    C --> E["Merge with guardrails"]
     D --> E
-    E --> F["Report<br/>Markdown or JSON"]
+    E --> F["Report<br/>Markdown or JSON + exit code"]
 ```
 
 1. **Load & trim.** Reads the `terraform show -json` output and keeps only resources that actually change. Updates are reduced to the attributes that differ, and sensitive values are replaced with `(sensitive)`.
-2. **Rule-based checks.** Deterministic checks for destroys, IAM wildcards, open ports, public buckets, missing encryption and missing tags. They always run, even without an LLM.
+2. **Rule-based checks.** Deterministic checks for destroys (including renames without a `moved` block), over-broad IAM and privilege escalation, open ports, public storage, missing encryption and missing tags. They always run, even without an LLM.
 3. **LLM review.** The model sees the trimmed plan plus the rule findings. It returns a risk level, a summary and extra findings in a strict schema.
-4. **Merge.** Combines both sets. The LLM can add findings or raise severity, but never remove or downgrade a rule finding, and invented resources are dropped. If the LLM fails, the rule findings are still reported.
-5. **Report.** A Markdown report (the future PR comment) or JSON, plus an exit code you can use to fail a build.
+4. **Merge.** Combines both sets. The LLM can add findings or raise severity, but never remove or downgrade a rule finding, and it can't replace a fix the rules computed exactly. Findings about resources that aren't in the plan are dropped. If the LLM fails, the rule findings are still reported.
+5. **Report.** A Markdown report (ready to post as a PR comment) or JSON, plus an exit code you can use to fail a build.
 
 ---
 
@@ -58,7 +58,7 @@ flowchart LR
 
 | Tool | Needed for | Check |
 |---|---|---|
-| Node.js 20+ | everything | `node -v` |
+| Node.js 20.11+ | everything | `node -v` |
 | Ollama + a model | the LLM review, run locally | `ollama list` |
 | Terraform | generating plans from your own code | `terraform -version` |
 
@@ -68,12 +68,12 @@ To set up the local model:
 ollama pull qwen2.5:7b-instruct
 ```
 
-If you don't have Terraform, run `./scripts/install-terraform.sh` (Ubuntu/WSL).
+If you don't have Terraform, see [HashiCorp's install guide](https://developer.hashicorp.com/terraform/install). On Ubuntu you can run `./scripts/install-terraform.sh`.
 
 ### 2. Install
 
 ```bash
-git clone git@github.com:meirakrish/iac-pr-reviewer.git
+git clone https://github.com/meirakrish/iac-pr-reviewer.git
 cd iac-pr-reviewer
 npm install
 npm run build
@@ -84,7 +84,7 @@ npm link
 
 ### 3. Try it on a sample plan
 
-The repo ships with 22 example plans (AWS, Azure and GCP) in `evals/cases/`. No cloud account is needed:
+The repo ships with 25 example plans (AWS, Azure, GCP and Terraform modules) in `evals/cases/`. No cloud account is needed:
 
 ```bash
 iac-review --plan evals/cases/07-rds-public-unencrypted/plan.json
@@ -127,11 +127,11 @@ iac-review --plan <file> [options]
 | `-p, --plan <file>` | Plan JSON to review. Use `-` to read from stdin. **Required.** |
 | `-f, --format md\|json` | `md` (default) prints a readable report; `json` prints the structured result. |
 | `-o, --out <file>` | Write the report to a file instead of the terminal. |
-| `--fail-on <level>` | Exit with code `2` if risk is at or above `low` / `medium` / `high` / `critical`. |
+| `--fail-on <level>` | Exit with code `2` if risk is at or above `low` / `medium` / `high` / `critical`. Default `none`. |
 | `--no-llm` | Rule-based checks only. |
 | `--provider <name>` | `ollama`, `anthropic` or `openai`. See [Choosing an LLM](#choosing-an-llm). |
 | `--model <name>` | Override the model name. |
-| `--required-tags <list>` | Comma-separated tags every taggable resource must have, e.g. `Team,Environment`. |
+| `--required-tags <list>` | Comma-separated tags (GCP: labels) every taggable resource must have, e.g. `Team,Environment`. |
 | `-q, --quiet` | Hide progress messages. |
 
 **Exit codes:** `0` OK · `1` error (bad file, invalid option) · `2` risk at or above `--fail-on`.
@@ -158,25 +158,25 @@ To force a choice, use `--provider` and `--model` (or `IAC_REVIEW_PROVIDER` / `I
 iac-review --plan plan.json --provider ollama --model qwen2.5-coder:7b
 ```
 
-If the LLM is unavailable (Ollama not running, API error, timeout), the review **still completes** with the rule-based results, and the report says the AI review was skipped.
+If the LLM is unavailable (Ollama not running, API error, timeout), the review **still completes** with the rule-based results, and the report notes that the AI review was unavailable.
 
 ### Environment variables
 
-Every option can also be set through the environment, which is handy for CI:
+The review options can also be set through the environment, which is handy for CI. Command-line flags take precedence.
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `IAC_REVIEW_PROVIDER` | auto | Same as `--provider` |
 | `IAC_REVIEW_MODEL` | per provider | Same as `--model` |
 | `IAC_REVIEW_FAIL_ON` | `none` | Same as `--fail-on` |
-| `IAC_REVIEW_NO_LLM` | | `true` = same as `--no-llm` |
+| `IAC_REVIEW_NO_LLM` | | `true`, `1` or `yes` = same as `--no-llm` |
 | `IAC_REVIEW_REQUIRED_TAGS` | | Same as `--required-tags` |
 | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | | API keys for hosted providers |
-| `OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL |
+| `OLLAMA_HOST` | `http://localhost:11434` | Ollama server address (`host:port` or a full URL) |
 | `IAC_REVIEW_NUM_CTX` | `16384` | Ollama context window (tokens). Lower it if the GPU runs out of memory. |
-| `IAC_REVIEW_MAX_PLAN_CHARS` | `40000` | Maximum plan size sent to the LLM. The largest-risk changes are kept first. |
+| `IAC_REVIEW_MAX_PLAN_CHARS` | `40000` | Maximum plan size sent to the LLM, in characters. Deletes and replacements are kept first. |
+| `IAC_REVIEW_MAX_OUTPUT_TOKENS` | `4096` | Cap on LLM output; stops a runaway generation quickly. |
 | `IAC_REVIEW_TIMEOUT_MS` | `180000` | LLM request timeout |
-| `IAC_REVIEW_MAX_OUTPUT_TOKENS` | `4096` | Cap on LLM output; stops a runaway generation quickly |
 
 ---
 
@@ -186,13 +186,13 @@ Every option can also be set through the environment, which is handy for CI:
 
 | Check | AWS | Azure | GCP | Severity |
 |---|---|---|---|---|
-| **Destroy / replace** | any resource; data stores (RDS, S3, DynamoDB, KMS…) | any resource; data stores (SQL, Storage, Cosmos DB, Key Vault, resource groups…) | any resource; data stores (Cloud SQL, buckets, BigQuery, KMS, projects…) | **critical** for data stores, otherwise high/medium |
+| **Destroy / replace** | any resource; data stores (RDS, S3, DynamoDB, KMS…) | any resource; data stores (SQL, Storage, Cosmos DB, Key Vault, resource groups…) | any resource; data stores (Cloud SQL, buckets, BigQuery, KMS, projects…) | **critical** for data stores, otherwise high/medium. Renames are detected, see [modules](#terraform-modules) |
 | **Network exposure** | security groups open to `0.0.0.0/0` / `::/0` | NSG rules from `*` / `Internet` / `0.0.0.0/0`; SQL/Postgres/MySQL firewall rules open to all IPs | firewall rules from `0.0.0.0/0`; Cloud SQL authorized networks `0.0.0.0/0` | **critical** for SSH/RDP/DB ports or all traffic, low for 80/443 |
-| **IAM** | `Action`/`Resource: "*"`, `NotAction`, trust open to `Principal: "*"` | Owner / User Access Administrator assignments; custom roles with `*` | `roles/owner`, `roles/editor`, IAM-admin roles; `allUsers` members | medium → **critical** (admin, or subscription/org-wide) |
+| **IAM** | `Action`/`Resource: "*"`, `NotAction`, trust open to `Principal: "*"` | Owner / User Access Administrator assignments; custom roles with `*` | `roles/owner`, `roles/editor`, IAM-admin roles; `allUsers` / `allAuthenticatedUsers` members | medium → **critical** (full admin, public members, or Azure admin roles at subscription scope) |
 | **Privilege escalation** | `iam:PassRole` + compute create; `iam:CreatePolicyVersion`, `iam:Attach*Policy`… on `*` | custom roles with `Microsoft.Authorization/*` write | custom roles with `actAs` + compute create, or `setIamPolicy`, SA key/token creation | high |
 | **Public storage** | public ACLs, disabled public-access-block, bucket policies open to `*` | containers with `blob`/`container` access; accounts allowing public containers (low) | bucket IAM for `allUsers`/`allAuthenticatedUsers`; public ACLs | high / **critical** for public write |
 | **Encryption** | unencrypted RDS, Redshift, EBS, EFS, ElastiCache, EC2 volumes | HTTP allowed or TLS < 1.2 on storage/SQL; Redis non-TLS port | Cloud SQL accepting unencrypted connections | medium / high |
-| **Missing tags** | `tags` (incl. provider `default_tags`) | `tags` | `labels` (incl. provider `default_labels`) | low |
+| **Missing tags** | `tags` (incl. provider `default_tags`) | `tags` | `labels` (incl. provider `default_labels`) | low. Without `--required-tags`, only resources with no tags at all |
 
 Azure and GCP encrypt disks and storage at rest by default, so for those clouds the encryption checks focus on traffic in transit.
 
@@ -203,7 +203,7 @@ Modules need no special setup: the plan lists every resource with its full addre
 The tool also catches the most common module accident: **renaming or moving a module or resource without a `moved` block**. Terraform then plans to destroy the existing resources and create empty new ones. When a deleted resource reappears at a new address (same address inside a renamed module, or same name/identifier after a resource rename), the finding says so and gives the exact fix:
 
 > 🔴 critical · `module.orders_db.aws_db_instance.this` · Looks like a rename: this aws_db_instance is destroyed and recreated as `module.orders_database.aws_db_instance.this`. Without a `moved` block, Terraform deletes everything in module.orders_db instead of renaming it.
-> **Fix:** Add a `moved` block with `from = module.orders_db` and `to = module.orders_database`.
+> **Fix:** Add a `moved` block with `from = module.orders_db` and `to = module.orders_database`, then re-run the plan: it should show no destroy.
 
 When the whole module moved, the fix is one module-level `moved` block. Otherwise it's one block per resource. Renames that already use `moved` blocks are recognised as harmless, and the report shows them in the plan line (`· 3 moved`).
 
@@ -228,11 +228,19 @@ It also writes the plain-English summary and the blast-radius/suggestion text fo
 npm test
 ```
 
-These cover the rule checks against real plans, sensitive-value redaction, the merge guardrails, the fallback when the LLM fails, the markdown output and config parsing. They don't need Ollama, an API key or Terraform.
+These cover the rule checks for all three clouds against real plans, rename detection, sensitive-value redaction, the merge guardrails, the LLM retry and fallback, the markdown output and config parsing. They don't need Ollama, an API key or Terraform.
+
+Type checking and code formatting ([Prettier](https://prettier.io)):
 
 ```bash
 npm run typecheck
 ```
+
+```bash
+npm run format
+```
+
+`npm run format:check` reports unformatted files without changing them.
 
 ### Evals: how good is the LLM?
 
@@ -285,11 +293,11 @@ The first compares a different model, the second uses a hosted provider (needs `
 ### Adding an eval case
 
 1. Create `evals/cases/26-my-case/main.tf` with the resources you want to test. Don't include provider blocks: the generator adds the ones you need (from `evals/providers/`) based on the resource types you use. Local modules go in a `modules/` folder inside the case.
-2. To test updates, destroys or replacements, add a `terraform.tfstate` describing the "before" state. The easiest way is to write the "before" config, plan it, and convert that plan into a realistic state:
+2. To test updates, destroys or replacements, add a `terraform.tfstate` describing the "before" state. The easiest way: write the "before" config in a scratch folder (with a provider file from `evals/providers/`), run `terraform plan -out p && terraform show -json p > before-plan.json` there, then convert that plan into a realistic state:
    ```bash
    node evals/state-from-plan.mjs before-plan.json > evals/cases/26-my-case/terraform.tfstate
    ```
-   `--move NEW=OLD` stores resources at an older address (for example `--move module.new=module.old`). See cases 23 and 24.
+   `--move NEW=OLD` stores resources at an older address instead (for example `--move module.new=module.old`). Cases 23 and 24 were built this way.
 3. Write `expected.json`:
    ```json
    {
@@ -316,8 +324,8 @@ The first compares a different model, the second uses a hosted provider (needs `
 | Problem | Fix |
 |---|---|
 | `AI review unavailable (could not connect…)` | Ollama isn't running. Start it (`ollama serve`, or `sudo systemctl start ollama`), or use `--no-llm`. |
-| `cudaMalloc failed: out of memory` | On WSL, Windows apps that use the GPU (especially browsers) can block the model from loading even when `nvidia-smi` shows free memory. Close them and retry. If that doesn't help, lower the context with `IAC_REVIEW_NUM_CTX=8192`, or run `wsl --shutdown` from PowerShell and reopen WSL. |
-| `ollama pull` fails with `Error: EOF` | An interrupted earlier download left partial files. Delete `/usr/share/ollama/.ollama/models/blobs/*-partial*` (needs sudo) and pull again. |
+| `cudaMalloc failed: out of memory` | The GPU doesn't have enough free memory to load the model. Close other GPU-heavy apps (browsers can use a lot) and retry, or lower the context with `IAC_REVIEW_NUM_CTX=8192`. |
+| `ollama pull` fails with `Error: EOF` | An interrupted earlier download left partial files. Delete the `*-partial*` files in Ollama's models folder (on Linux: `/usr/share/ollama/.ollama/models/blobs/`, needs sudo) and pull again. |
 | `Plan is not valid JSON` | You passed the binary plan. Run `terraform show -json plan.tfplan > plan.json` first. |
 | `iac-review: command not found` | Run `npm run build && npm link` in the repo, or use `npx tsx src/cli.ts` instead. |
 
@@ -331,7 +339,7 @@ src/
   review.ts         pipeline: prechecks → LLM → merge
   schema.ts         zod schemas for LLM output and the final result
   config.ts         flags / env vars / defaults
-  plan/             load the plan JSON, trim it and redact secrets for the LLM
+  plan/             load the plan JSON, detect renames, trim it and redact secrets for the LLM
   prechecks/        rule-based checks (one file per check)
   llm/              provider setup (Ollama/Anthropic/OpenAI) and the prompt
   report/           merge rule + LLM findings, render markdown
@@ -341,6 +349,7 @@ evals/
   providers/        offline provider configs (aws, azurerm, google)
   mock/             fake Azure CLI + Resource Manager stub for offline Azure plans
   run.ts, score.ts  eval runner and scorer
-  state-from-plan.mjs  build a realistic terraform.tfstate for a case from a plan
+  state-from-plan.mjs
+                    build a realistic terraform.tfstate for a case from a plan
 scripts/            helper scripts (Terraform install)
 ```

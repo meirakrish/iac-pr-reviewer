@@ -7,7 +7,12 @@ export function evalPlan(name: string): TerraformPlan {
   return parsePlan(readFileSync(join(import.meta.dirname, "..", "evals", "cases", name, "plan.json"), "utf8"));
 }
 
-export function rc(type: string, after: Record<string, unknown> | null, actions: Action[] = ["create"], extra: Partial<ResourceChange["change"]> = {}): ResourceChange {
+export function rc(
+  type: string,
+  after: Record<string, unknown> | null,
+  actions: Action[] = ["create"],
+  extra: Partial<ResourceChange["change"]> = {},
+): ResourceChange {
   return {
     address: `${type}.test`,
     mode: "managed",

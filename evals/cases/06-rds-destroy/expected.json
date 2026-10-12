@@ -1,7 +1,5 @@
 {
   "description": "Production Postgres instance removed from config with skip_final_snapshot = true and no deletion protection.",
   "risk": { "min": "critical", "max": "critical" },
-  "findings": [
-    { "resource": "aws_db_instance.orders", "category": "data-loss", "minSeverity": "critical" }
-  ]
+  "findings": [{ "resource": "aws_db_instance.orders", "category": "data-loss", "minSeverity": "critical" }]
 }

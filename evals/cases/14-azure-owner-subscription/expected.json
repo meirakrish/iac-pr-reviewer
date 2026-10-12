@@ -1,7 +1,5 @@
 {
   "description": "CI service principal gets Owner on the whole subscription.",
   "risk": { "min": "critical", "max": "critical" },
-  "findings": [
-    { "resource": "azurerm_role_assignment.ci_owner", "category": "iam", "minSeverity": "critical" }
-  ]
+  "findings": [{ "resource": "azurerm_role_assignment.ci_owner", "category": "iam", "minSeverity": "critical" }]
 }

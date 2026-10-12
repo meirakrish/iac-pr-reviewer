@@ -8,7 +8,10 @@ import { toJsonSchema } from "@langchain/core/utils/json_schema";
 import { trimToSentence } from "../src/llm/review.js";
 import { evalPlan } from "./helpers.js";
 
-/** Minimal stand-in for a LangChain chat model: withStructuredOutput(...).invoke() resolves or throws, one result per call. */
+/**
+ * Minimal stand-in for a LangChain chat model.
+ * withStructuredOutput(...).invoke() resolves or throws, using one result per call.
+ */
 function fakeModel(...results: (LlmReview | Error)[]): BaseChatModel & { calls: number } {
   const model = {
     calls: 0,
@@ -31,11 +34,22 @@ describe("reviewPlan", () => {
     const model = fakeModel({
       riskLevel: "high",
       summary: "Grants PassRole on everything.",
-      findings: [{ resource: "aws_iam_policy.deployer", severity: "high", category: "iam", issue: "PassRole escalation", blastRadius: "Admin takeover", suggestion: "Scope PassRole" }],
+      findings: [
+        {
+          resource: "aws_iam_policy.deployer",
+          severity: "high",
+          category: "iam",
+          issue: "PassRole escalation",
+          blastRadius: "Admin takeover",
+          suggestion: "Scope PassRole",
+        },
+      ],
     });
     const r = await reviewPlan(evalPlan("09-iam-passrole-escalation"), config, { model });
     expect(r.riskLevel).toBe("high");
-    expect(r.findings).toEqual([expect.objectContaining({ source: "both", severity: "high", ruleId: "iam-privilege-escalation" })]);
+    expect(r.findings).toEqual([
+      expect.objectContaining({ source: "both", severity: "high", ruleId: "iam-privilege-escalation" }),
+    ]);
     expect(r.llm).toMatchObject({ ok: true, provider: "ollama" });
   });
 
@@ -49,7 +63,7 @@ describe("reviewPlan", () => {
 
   it("retries once when the model returns unusable output", async () => {
     const good: LlmReview = { riskLevel: "critical", summary: "SSH is open.", findings: [] };
-    const model = fakeModel(new Error("Failed to parse. Text: \"{ \\n\\n\\n\""), good);
+    const model = fakeModel(new Error('Failed to parse. Text: "{ \\n\\n\\n"'), good);
     const r = await reviewPlan(evalPlan("04-open-ssh"), config, { model });
     expect(model.calls).toBe(2);
     expect(r.llm.ok).toBe(true);
@@ -100,9 +114,20 @@ describe("renderMarkdown", () => {
 
 describe("resolveConfig", () => {
   it("prefers explicit input over env, and detects hosted providers from API keys", () => {
-    expect(resolveConfig({}, { ANTHROPIC_API_KEY: "x" }).llm).toMatchObject({ provider: "anthropic", model: "claude-sonnet-5-5" });
-    expect(resolveConfig({ provider: "ollama" }, { ANTHROPIC_API_KEY: "x", IAC_REVIEW_MODEL: "llama3" }).llm).toMatchObject({ provider: "ollama", model: "llama3" });
+    expect(resolveConfig({}, { ANTHROPIC_API_KEY: "x" }).llm).toMatchObject({
+      provider: "anthropic",
+      model: "claude-sonnet-5-5",
+    });
+    expect(
+      resolveConfig({ provider: "ollama" }, { ANTHROPIC_API_KEY: "x", IAC_REVIEW_MODEL: "llama3" }).llm,
+    ).toMatchObject({ provider: "ollama", model: "llama3" });
     expect(resolveConfig({}, { IAC_REVIEW_REQUIRED_TAGS: "Team, Owner" }).requiredTags).toEqual(["Team", "Owner"]);
+  });
+
+  it("accepts OLLAMA_HOST with or without a scheme", () => {
+    expect(resolveConfig({}, { OLLAMA_HOST: "127.0.0.1:11434" }).llm?.baseUrl).toBe("http://127.0.0.1:11434");
+    expect(resolveConfig({}, { OLLAMA_HOST: "https://ollama.internal" }).llm?.baseUrl).toBe("https://ollama.internal");
+    expect(resolveConfig({}, {}).llm?.baseUrl).toBeUndefined();
   });
 
   it("rejects invalid values", () => {

@@ -23,7 +23,10 @@ export interface TrimmedPlan {
   omitted: string[];
 }
 
-/** Replace every value whose mask is `true` with a placeholder, mirroring Terraform's *_sensitive / after_unknown shapes. */
+/**
+ * Replace every value whose mask is `true` with a placeholder.
+ * Masks mirror the shape of Terraform's *_sensitive / after_unknown fields.
+ */
 export function applyMask(value: unknown, mask: unknown, placeholder: string): unknown {
   if (mask === true) return placeholder;
   if (Array.isArray(mask)) {
@@ -69,7 +72,8 @@ export function trimChange(rc: ResourceChange): TrimmedChange {
   else {
     const changed: Record<string, { before: unknown; after: unknown }> = {};
     for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
-      if (!isDeepStrictEqual(before[key], after[key])) changed[key] = { before: before[key] ?? null, after: after[key] ?? null };
+      if (!isDeepStrictEqual(before[key], after[key]))
+        changed[key] = { before: before[key] ?? null, after: after[key] ?? null };
     }
     out.changed = changed;
   }
@@ -79,7 +83,8 @@ export function trimChange(rc: ResourceChange): TrimmedChange {
 /** Sanitize and shrink changed resources so the plan fits in an LLM prompt. Riskiest actions are kept first. */
 export function trimPlan(changes: ResourceChange[], maxChars = 40_000): TrimmedPlan {
   const sorted = [...changes].sort(
-    (a, b) => (ACTION_PRIORITY[changeKind(a.change.actions)] ?? 9) - (ACTION_PRIORITY[changeKind(b.change.actions)] ?? 9),
+    (a, b) =>
+      (ACTION_PRIORITY[changeKind(a.change.actions)] ?? 9) - (ACTION_PRIORITY[changeKind(b.change.actions)] ?? 9),
   );
   const result: TrimmedPlan = { changes: [], omitted: [] };
   let used = 0;

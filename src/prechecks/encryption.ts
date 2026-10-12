@@ -37,7 +37,8 @@ export const encryptionCheck: Precheck = (rc) => {
   if (rc.type === "aws_launch_template") {
     for (const m of asArray<Record<string, unknown>>(a.block_device_mappings)) {
       for (const ebs of asArray<Record<string, unknown>>(m?.ebs)) {
-        if (ebs && (ebs.encrypted === false || ebs.encrypted === "false")) unencrypted.push(`block_device_mappings[${String(m.device_name)}].ebs.encrypted`);
+        if (ebs && (ebs.encrypted === false || ebs.encrypted === "false"))
+          unencrypted.push(`block_device_mappings[${String(m.device_name)}].ebs.encrypted`);
       }
     }
   }
@@ -48,7 +49,8 @@ export const encryptionCheck: Precheck = (rc) => {
       severity,
       category: "encryption",
       issue: `Storage is not encrypted at rest (${unencrypted.join(", ")}).`,
-      blastRadius: "Data, snapshots and backups are stored in plaintext; this usually breaks compliance requirements (SOC 2, PCI, HIPAA).",
+      blastRadius:
+        "Data, snapshots and backups are stored in plaintext; this usually breaks compliance requirements (SOC 2, PCI, HIPAA).",
       suggestion: `Set ${unencrypted.map((u) => `${u} = true`).join(", ")}${rc.type.startsWith("aws_db") || rc.type.startsWith("aws_rds") ? " (note: enabling this on an existing database forces replacement)" : ""}.`,
     }),
   ];
@@ -56,24 +58,48 @@ export const encryptionCheck: Precheck = (rc) => {
 
 const WEAK_TLS = new Set(["TLS1_0", "TLS1_1", "1.0", "1.1", "Disabled"]);
 
-/** Azure and GCP encrypt storage at rest by default, so for them the risk is unencrypted or weakly encrypted traffic. */
+/**
+ * Azure and GCP encrypt storage at rest by default, so for them the risk is unencrypted or weakly encrypted traffic.
+ */
 function transitCheck(rc: Parameters<Precheck>[0], a: Record<string, unknown>): ReturnType<Precheck> {
   const problems: { severity: Severity; text: string; fix: string }[] = [];
 
   if (rc.type === "azurerm_storage_account") {
-    if (a.https_traffic_only_enabled === false) problems.push({ severity: "high", text: "plain HTTP is allowed (https_traffic_only_enabled = false)", fix: "https_traffic_only_enabled = true" });
-    if (WEAK_TLS.has(String(a.min_tls_version))) problems.push({ severity: "medium", text: `minimum TLS version is ${a.min_tls_version}`, fix: 'min_tls_version = "TLS1_2"' });
+    if (a.https_traffic_only_enabled === false)
+      problems.push({
+        severity: "high",
+        text: "plain HTTP is allowed (https_traffic_only_enabled = false)",
+        fix: "https_traffic_only_enabled = true",
+      });
+    if (WEAK_TLS.has(String(a.min_tls_version)))
+      problems.push({
+        severity: "medium",
+        text: `minimum TLS version is ${a.min_tls_version}`,
+        fix: 'min_tls_version = "TLS1_2"',
+      });
   }
   if (rc.type === "azurerm_mssql_server" && WEAK_TLS.has(String(a.minimum_tls_version))) {
-    problems.push({ severity: "medium", text: `minimum TLS version is ${a.minimum_tls_version}`, fix: 'minimum_tls_version = "1.2"' });
+    problems.push({
+      severity: "medium",
+      text: `minimum TLS version is ${a.minimum_tls_version}`,
+      fix: 'minimum_tls_version = "1.2"',
+    });
   }
   if (rc.type === "azurerm_redis_cache" && a.non_ssl_port_enabled === true) {
-    problems.push({ severity: "medium", text: "the non-TLS port 6379 is enabled", fix: "non_ssl_port_enabled = false" });
+    problems.push({
+      severity: "medium",
+      text: "the non-TLS port 6379 is enabled",
+      fix: "non_ssl_port_enabled = false",
+    });
   }
   if (rc.type === "google_sql_database_instance") {
     const ip = asArray<Record<string, unknown>>(asArray<Record<string, unknown>>(a.settings)[0]?.ip_configuration)[0];
     if (ip?.ssl_mode === "ALLOW_UNENCRYPTED_AND_ENCRYPTED") {
-      problems.push({ severity: ip.ipv4_enabled === false ? "low" : "medium", text: "unencrypted connections are accepted (ssl_mode = ALLOW_UNENCRYPTED_AND_ENCRYPTED)", fix: 'ssl_mode = "ENCRYPTED_ONLY"' });
+      problems.push({
+        severity: ip.ipv4_enabled === false ? "low" : "medium",
+        text: "unencrypted connections are accepted (ssl_mode = ALLOW_UNENCRYPTED_AND_ENCRYPTED)",
+        fix: 'ssl_mode = "ENCRYPTED_ONLY"',
+      });
     }
   }
 

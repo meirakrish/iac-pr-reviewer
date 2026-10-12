@@ -55,7 +55,8 @@ for dir in cases/*/; do
   cp -r "$dir". "$work"/
   rm -f "$work"/plan.json "$work"/expected.json
 
-  # Pick providers from resource type prefixes (including inside local modules), and write a matching required_providers block.
+  # Pick providers from resource type prefixes (including inside local modules), and write a matching required_providers
+  # block.
   providers=()
   for p in aws azurerm google; do
     if grep -rqE "(resource \"${p}_|\"type\": *\"${p}_)" --include='*.tf' --include='*.tfstate' "$work" 2>/dev/null; then

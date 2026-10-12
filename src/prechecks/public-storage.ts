@@ -22,8 +22,11 @@ const s3Check: Precheck = (rc) => {
         severity,
         category: "public-storage",
         issue: `Bucket ACL is "${acl}", making objects ${acl === "public-read-write" ? "readable and writable" : "readable"} by anyone.`,
-        blastRadius: "All objects in the bucket can be listed/downloaded from the internet" + (acl === "public-read-write" ? ", and anyone can upload or overwrite data." : "."),
-        suggestion: 'Use a "private" ACL (or BucketOwnerEnforced ownership) and serve public content through CloudFront with OAC.',
+        blastRadius:
+          "All objects in the bucket can be listed/downloaded from the internet" +
+          (acl === "public-read-write" ? ", and anyone can upload or overwrite data." : "."),
+        suggestion:
+          'Use a "private" ACL (or BucketOwnerEnforced ownership) and serve public content through CloudFront with OAC.',
       }),
     ];
   }
@@ -46,7 +49,9 @@ const s3Check: Precheck = (rc) => {
   }
 
   if (rc.type === "aws_s3_bucket_policy") {
-    const publicStmts = parsePolicy(a.policy).filter((s) => s.Effect === "Allow" && isPublicPrincipal(s.Principal) && !s.Condition);
+    const publicStmts = parsePolicy(a.policy).filter(
+      (s) => s.Effect === "Allow" && isPublicPrincipal(s.Principal) && !s.Condition,
+    );
     if (!publicStmts.length) return [];
     return [
       finding(rc, "s3-public-policy", {
@@ -54,7 +59,8 @@ const s3Check: Precheck = (rc) => {
         category: "public-storage",
         issue: 'Bucket policy allows Principal "*" with no Condition.',
         blastRadius: "Anyone on the internet can perform the allowed actions on this bucket's objects.",
-        suggestion: "Restrict the Principal to specific accounts/roles, or add a Condition (e.g. aws:SourceArn for CloudFront).",
+        suggestion:
+          "Restrict the Principal to specific accounts/roles, or add a Condition (e.g. aws:SourceArn for CloudFront).",
       }),
     ];
   }
@@ -62,7 +68,10 @@ const s3Check: Precheck = (rc) => {
   return [];
 };
 
-/** Azure containers allow anonymous reads via container_access_type; accounts gate it with allow_nested_items_to_be_public. */
+/**
+ * Azure containers allow anonymous reads via container_access_type.
+ * The storage account gates this with allow_nested_items_to_be_public.
+ */
 const azureStorageCheck: Precheck = (rc) => {
   const a = after(rc);
   if (!a) return [];
@@ -75,8 +84,10 @@ const azureStorageCheck: Precheck = (rc) => {
         severity: "high",
         category: "public-storage",
         issue: `Container access type is "${access}": anyone can read blobs${access === "container" ? " and list the container" : ""} without authentication.`,
-        blastRadius: "Every blob in the container can be downloaded from the internet by anyone who knows or guesses the URL.",
-        suggestion: 'Set container_access_type = "private" and share data with SAS tokens or a CDN with private origin access.',
+        blastRadius:
+          "Every blob in the container can be downloaded from the internet by anyone who knows or guesses the URL.",
+        suggestion:
+          'Set container_access_type = "private" and share data with SAS tokens or a CDN with private origin access.',
       }),
     ];
   }
@@ -88,7 +99,8 @@ const azureStorageCheck: Precheck = (rc) => {
         category: "public-storage",
         issue: "Storage account allows containers to be made public (allow_nested_items_to_be_public = true).",
         blastRadius: "A single container setting is enough to expose data publicly.",
-        suggestion: "Set allow_nested_items_to_be_public = false unless this account intentionally serves public content.",
+        suggestion:
+          "Set allow_nested_items_to_be_public = false unless this account intentionally serves public content.",
       }),
     ];
   }
@@ -108,7 +120,9 @@ const gcsCheck: Precheck = (rc) => {
   if (!a) return [];
 
   if (rc.type === "google_storage_bucket_iam_member" || rc.type === "google_storage_bucket_iam_binding") {
-    const members = [...asArray<string>(a.member), ...asArray<string>(a.members)].filter((m) => GCP_PUBLIC_MEMBERS.has(m));
+    const members = [...asArray<string>(a.member), ...asArray<string>(a.members)].filter((m) =>
+      GCP_PUBLIC_MEMBERS.has(m),
+    );
     if (!members.length) return [];
     const role = String(a.role ?? "");
     const write = isGcsWriteRole(role);
@@ -120,12 +134,17 @@ const gcsCheck: Precheck = (rc) => {
         blastRadius: write
           ? "Anyone on the internet can read, upload and overwrite objects in the bucket."
           : "Every object in the bucket can be downloaded by anyone on the internet.",
-        suggestion: "Grant access to specific users, groups or service accounts; enforce public_access_prevention on the bucket.",
+        suggestion:
+          "Grant access to specific users, groups or service accounts; enforce public_access_prevention on the bucket.",
       }),
     ];
   }
 
-  if (rc.type === "google_storage_bucket_acl" || rc.type === "google_storage_default_object_acl" || rc.type === "google_storage_object_acl") {
+  if (
+    rc.type === "google_storage_bucket_acl" ||
+    rc.type === "google_storage_default_object_acl" ||
+    rc.type === "google_storage_object_acl"
+  ) {
     const predefined = String(a.predefined_acl ?? "");
     const publicEntities = asArray<string>(a.role_entity).filter((e) => /:(allUsers|allAuthenticatedUsers)$/.test(e));
     const severity = GCP_PUBLIC_ACLS[predefined] ?? (publicEntities.length ? "high" : undefined);
@@ -135,8 +154,10 @@ const gcsCheck: Precheck = (rc) => {
         severity,
         category: "public-storage",
         issue: `Public ACL on GCS (${predefined || publicEntities.join(", ")}).`,
-        blastRadius: "Objects are readable" + (severity === "critical" ? " and writable" : "") + " by anyone on the internet.",
-        suggestion: "Remove public ACL entries; prefer uniform bucket-level access with IAM and public_access_prevention = \"enforced\".",
+        blastRadius:
+          "Objects are readable" + (severity === "critical" ? " and writable" : "") + " by anyone on the internet.",
+        suggestion:
+          'Remove public ACL entries; prefer uniform bucket-level access with IAM and public_access_prevention = "enforced".',
       }),
     ];
   }
@@ -144,4 +165,8 @@ const gcsCheck: Precheck = (rc) => {
   return [];
 };
 
-export const publicStorageCheck: Precheck = (rc, ctx) => [...s3Check(rc, ctx), ...azureStorageCheck(rc, ctx), ...gcsCheck(rc, ctx)];
+export const publicStorageCheck: Precheck = (rc, ctx) => [
+  ...s3Check(rc, ctx),
+  ...azureStorageCheck(rc, ctx),
+  ...gcsCheck(rc, ctx),
+];

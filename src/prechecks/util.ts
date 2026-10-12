@@ -10,7 +10,11 @@ export interface PrecheckContext {
 
 export type Precheck = (rc: ResourceChange, ctx: PrecheckContext) => Finding[];
 
-export function finding(rc: ResourceChange, ruleId: string, f: Omit<Finding, "resource" | "source" | "ruleId">): Finding {
+export function finding(
+  rc: ResourceChange,
+  ruleId: string,
+  f: Omit<Finding, "resource" | "source" | "ruleId">,
+): Finding {
   return { resource: rc.address, source: "precheck", ruleId, ...f };
 }
 
@@ -38,7 +42,10 @@ export interface PolicyStatement {
   Condition?: unknown;
 }
 
-/** Parse an IAM-style policy document given as a JSON string (as it appears in plans). Returns [] when unknown/unparseable. */
+/**
+ * Parse an IAM-style policy document given as a JSON string, as it appears in plans.
+ * Returns [] when the policy is unknown or unparseable.
+ */
 export function parsePolicy(doc: unknown): PolicyStatement[] {
   if (typeof doc !== "string" || doc.trim() === "") return [];
   try {

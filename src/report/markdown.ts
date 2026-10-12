@@ -22,7 +22,9 @@ export function renderMarkdown(r: ReviewResult, opts: { failOn?: Severity | "non
 
   if (opts.failOn && opts.failOn !== "none" && SEVERITY_ORDER[r.riskLevel] >= SEVERITY_ORDER[opts.failOn]) {
     out.push("");
-    out.push(`> [!CAUTION]\n> Risk level is at or above the configured threshold (\`${opts.failOn}\`); this check is failing.`);
+    out.push(
+      `> [!CAUTION]\n> Risk level is at or above the configured threshold (\`${opts.failOn}\`); this check is failing.`,
+    );
   }
 
   const main = r.findings.filter((f) => f.severity !== "low");
@@ -33,7 +35,14 @@ export function renderMarkdown(r: ReviewResult, opts: { failOn?: Severity | "non
   } else {
     if (main.length) out.push("", `### Findings (${main.length})`, "", findingsTable(main));
     if (minor.length) {
-      out.push("", `<details><summary>Low-severity findings (${minor.length})</summary>`, "", findingsTable(minor), "", "</details>");
+      out.push(
+        "",
+        `<details><summary>Low-severity findings (${minor.length})</summary>`,
+        "",
+        findingsTable(minor),
+        "",
+        "</details>",
+      );
     }
   }
 
@@ -54,7 +63,11 @@ function findingsTable(findings: Finding[]): string {
     (f) =>
       `| ${ICON[f.severity]} ${f.severity} | \`${escapeCell(f.resource)}\` | ${escapeCell(f.issue)} | ${escapeCell(f.blastRadius)} | ${escapeCell(f.suggestion)} | ${SOURCE_LABEL[f.source]} |`,
   );
-  return ["| Severity | Resource | Issue | Blast radius | Suggestion | Source |", "|---|---|---|---|---|---|", ...rows].join("\n");
+  return [
+    "| Severity | Resource | Issue | Blast radius | Suggestion | Source |",
+    "|---|---|---|---|---|---|",
+    ...rows,
+  ].join("\n");
 }
 
 function escapeCell(s: string): string {

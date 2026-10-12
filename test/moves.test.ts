@@ -27,7 +27,12 @@ describe("detectMoves", () => {
       res("module.new.aws_db_instance.this", ["create"]),
       res("module.new.aws_security_group.db", ["create"]),
     ]);
-    expect(moves.get("module.old.aws_db_instance.this")).toMatchObject({ to: "module.new.aws_db_instance.this", via: "module", movedFrom: "module.old", movedTo: "module.new" });
+    expect(moves.get("module.old.aws_db_instance.this")).toMatchObject({
+      to: "module.new.aws_db_instance.this",
+      via: "module",
+      movedFrom: "module.old",
+      movedTo: "module.new",
+    });
     expect(moves.size).toBe(2);
   });
 
@@ -37,7 +42,10 @@ describe("detectMoves", () => {
       res("module.old.aws_s3_bucket.stays", ["no-op"]),
       res("module.new.aws_db_instance.this", ["create"]),
     ]);
-    expect(moves.get("module.old.aws_db_instance.this")).toMatchObject({ movedFrom: "module.old.aws_db_instance.this", movedTo: "module.new.aws_db_instance.this" });
+    expect(moves.get("module.old.aws_db_instance.this")).toMatchObject({
+      movedFrom: "module.old.aws_db_instance.this",
+      movedTo: "module.new.aws_db_instance.this",
+    });
   });
 
   it("handles nested modules and for_each keys", () => {
@@ -45,17 +53,35 @@ describe("detectMoves", () => {
       res('module.app.module.db["eu"].aws_db_instance.this', ["delete"]),
       res('module.platform.module.db["eu"].aws_db_instance.this', ["create"]),
     ]);
-    expect(moves.get('module.app.module.db["eu"].aws_db_instance.this')).toMatchObject({ movedFrom: 'module.app.module.db["eu"]', movedTo: 'module.platform.module.db["eu"]' });
+    expect(moves.get('module.app.module.db["eu"].aws_db_instance.this')).toMatchObject({
+      movedFrom: 'module.app.module.db["eu"]',
+      movedTo: 'module.platform.module.db["eu"]',
+    });
   });
 
   it("pairs renamed resources by identifying attribute", () => {
-    const moves = detectMoves([res("aws_s3_bucket.logs", ["delete"], { bucket: "acme-logs" }), res("aws_s3_bucket.app_logs", ["create"], { bucket: "acme-logs" })]);
-    expect(moves.get("aws_s3_bucket.logs")).toMatchObject({ to: "aws_s3_bucket.app_logs", via: "identity", movedFrom: "aws_s3_bucket.logs" });
+    const moves = detectMoves([
+      res("aws_s3_bucket.logs", ["delete"], { bucket: "acme-logs" }),
+      res("aws_s3_bucket.app_logs", ["create"], { bucket: "acme-logs" }),
+    ]);
+    expect(moves.get("aws_s3_bucket.logs")).toMatchObject({
+      to: "aws_s3_bucket.app_logs",
+      via: "identity",
+      movedFrom: "aws_s3_bucket.logs",
+    });
   });
 
   it("does not pair different types, different identities, or plain deletes", () => {
-    expect(detectMoves([res("aws_s3_bucket.a", ["delete"], { bucket: "x" }), res("aws_s3_bucket.b", ["create"], { bucket: "y" })]).size).toBe(0);
-    expect(detectMoves([res("module.a.aws_s3_bucket.this", ["delete"]), res("module.b.aws_sqs_queue.this", ["create"])]).size).toBe(0);
+    expect(
+      detectMoves([
+        res("aws_s3_bucket.a", ["delete"], { bucket: "x" }),
+        res("aws_s3_bucket.b", ["create"], { bucket: "y" }),
+      ]).size,
+    ).toBe(0);
+    expect(
+      detectMoves([res("module.a.aws_s3_bucket.this", ["delete"]), res("module.b.aws_sqs_queue.this", ["create"])])
+        .size,
+    ).toBe(0);
     expect(detectMoves([res("aws_db_instance.orders", ["delete"], { identifier: "orders" })]).size).toBe(0);
   });
 
@@ -72,7 +98,10 @@ describe("detectMoves", () => {
 describe("missing moved block finding", () => {
   it("explains the rename and gives the exact moved block on a real plan", () => {
     const plan = evalPlan("23-module-rename-no-moved");
-    const findings = runPrechecks(changedResources(plan), { requiredTags: [], moves: detectMoves(plan.resource_changes ?? []) });
+    const findings = runPrechecks(changedResources(plan), {
+      requiredTags: [],
+      moves: detectMoves(plan.resource_changes ?? []),
+    });
     const db = findings.find((f) => f.resource === "module.orders_db.aws_db_instance.this")!;
     expect(db).toMatchObject({ severity: "critical", ruleId: "missing-moved-block", category: "data-loss" });
     expect(db.issue).toContain("module.orders_database.aws_db_instance.this");
