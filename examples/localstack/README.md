@@ -6,7 +6,7 @@ Because the plans come from real state, they include everything a real PR would:
 
 ## Run it
 
-Needs Docker, Terraform, Node.js 20.11+ and (for the AI part) Ollama with `qwen3.5:9b`. From this folder:
+Needs Docker, Terraform, Node.js 22.19+ and (for the AI part) Ollama with `qwen3.5:9b`. From this folder:
 
 ```bash
 ./demo.sh all
