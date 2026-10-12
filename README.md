@@ -58,7 +58,7 @@ flowchart TD
 
 | Tool | Needed for | Check |
 |---|---|---|
-| Node.js 20.11+ | everything | `node -v` |
+| Node.js 22.19+ | everything | `node -v` |
 | pnpm 12 | installing and running | `pnpm -v` (install: `corepack enable`) |
 | Ollama + a model | the LLM review, run locally | `ollama list` |
 | Terraform | generating plans from your own code | `terraform -version` |

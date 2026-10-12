@@ -13,7 +13,7 @@
     "url": "https://github.com/meirakrish/iac-pr-reviewer/issues"
   },
   "engines": {
-    "node": ">=20.11"
+    "node": ">=22.19"
   },
   "bin": {
     "iac-review": "dist/cli.js"
