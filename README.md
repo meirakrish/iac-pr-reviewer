@@ -403,7 +403,8 @@ evals/
                     build a realistic terraform.tfstate for a case from a plan
 examples/
   localstack/       try it against infrastructure deployed to LocalStack in Docker
-scripts/            helper scripts (Terraform install)
+docs/               guide to testing and comparing local models
+scripts/            helper scripts (Terraform install, model comparison)
 ```
 
 ## Related projects
