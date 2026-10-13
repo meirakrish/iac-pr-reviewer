@@ -19,7 +19,7 @@
     "iac-review": "dist/cli.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "typecheck": "tsc",
     "test": "vitest run",
     "format": "prettier --write .",
