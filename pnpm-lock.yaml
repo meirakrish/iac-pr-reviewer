@@ -176,8 +176,8 @@ importers:
         specifier: ^1.6.2
         version: 1.6.2(@langchain/core@1.2.17(openai@7.32.0(zod@4.6.6)))
       '@meirakrish/llm-kit':
-        specifier: https://github.com/meirakrish/llm-kit/releases/download/v0.1.0/meirakrish-llm-kit-0.1.0.tgz
-        version: https://github.com/meirakrish/llm-kit/releases/download/v0.1.0/meirakrish-llm-kit-0.1.0.tgz(@langchain/anthropic@1.5.12(@langchain/core@1.2.17(openai@7.32.0(zod@4.6.6))))(@langchain/core@1.2.17(openai@7.32.0(zod@4.6.6)))(@langchain/openai@1.6.2(@langchain/core@1.2.17(openai@7.32.0(zod@4.6.6))))(zod@4.6.6)
+        specifier: ^0.1.1
+        version: 0.1.1(@langchain/anthropic@1.5.12(@langchain/core@1.2.17(openai@7.32.0(zod@4.6.6))))(@langchain/core@1.2.17(openai@7.32.0(zod@4.6.6)))(@langchain/openai@1.6.2(@langchain/core@1.2.17(openai@7.32.0(zod@4.6.6))))(zod@4.6.6)
       zod:
         specifier: ^4.6.6
         version: 4.6.6
@@ -404,9 +404,8 @@ packages:
     peerDependencies:
       '@langchain/core': ^1.2.14
 
-  '@meirakrish/llm-kit@https://github.com/meirakrish/llm-kit/releases/download/v0.1.0/meirakrish-llm-kit-0.1.0.tgz':
-    resolution: {integrity: sha512-DYA5ZIhiFYoVLoMqWaMVsP72MlStxhDOfsaBkWiw5DAZdtUXLPtJaVUV+aBom1qSO3tTC/D78IL+FV1Uyjtdpw==, tarball: https://github.com/meirakrish/llm-kit/releases/download/v0.1.0/meirakrish-llm-kit-0.1.0.tgz}
-    version: 0.1.0
+  '@meirakrish/llm-kit@0.1.1':
+    resolution: {integrity: sha512-fpT5Qa3UJCmgZNL9ZbCUtyelO/fzrE6T4kPryPnJAZHa4dXiN05LEBWJAHCL+3sckjo7DowNBqevnLzr9OvI/g==}
     engines: {node: '>=22.19'}
     peerDependencies:
       '@langchain/anthropic': ^1.5.0
@@ -1173,7 +1172,7 @@ snapshots:
       - undici
       - ws
 
-  '@meirakrish/llm-kit@https://github.com/meirakrish/llm-kit/releases/download/v0.1.0/meirakrish-llm-kit-0.1.0.tgz(@langchain/anthropic@1.5.12(@langchain/core@1.2.17(openai@7.32.0(zod@4.6.6))))(@langchain/core@1.2.17(openai@7.32.0(zod@4.6.6)))(@langchain/openai@1.6.2(@langchain/core@1.2.17(openai@7.32.0(zod@4.6.6))))(zod@4.6.6)':
+  '@meirakrish/llm-kit@0.1.1(@langchain/anthropic@1.5.12(@langchain/core@1.2.17(openai@7.32.0(zod@4.6.6))))(@langchain/core@1.2.17(openai@7.32.0(zod@4.6.6)))(@langchain/openai@1.6.2(@langchain/core@1.2.17(openai@7.32.0(zod@4.6.6))))(zod@4.6.6)':
     dependencies:
       '@langchain/core': 1.2.17(openai@7.32.0(zod@4.6.6))
       '@langchain/ollama': 1.3.0(@langchain/core@1.2.17(openai@7.32.0(zod@4.6.6)))
