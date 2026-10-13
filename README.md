@@ -75,7 +75,7 @@ flowchart TD
 | Ollama + a model | the LLM review, run locally | `ollama list` |
 | Terraform | generating plans from your own code | `terraform -version` |
 
-To set up the local model:
+To set up the local model, install Ollama ([download page](https://ollama.com/download); on Linux: `curl -fsSL https://ollama.com/install.sh | sh`), then pull the model:
 
 ```bash
 ollama pull qwen3.5:9b
