@@ -7,6 +7,10 @@ It combines two layers:
 - **Rule-based checks**, which are fast, deterministic and always run. They catch destroys, over-broad IAM, ports open to the internet, public storage, unencrypted storage or traffic, and missing tags.
 - **An LLM review** (local Ollama, Anthropic or OpenAI), which explains the impact and catches what rules can't, such as a publicly accessible database, a database with no backups, or audit logging being turned off.
 
+On the 25 eval scenarios (AWS, Azure, GCP and Terraform modules), adding the LLM, here the local `qwen3.5:9b`, raises finding recall from 84% with the rules alone to 100%, at 91% precision. See [Evals](#evals-how-good-is-the-llm).
+
+It shares its LLM layer, severity scale and settings with [k8s-devops-agent](https://github.com/meirakrish/k8s-devops-agent) through [llm-kit](https://github.com/meirakrish/llm-kit).
+
 ## Example
 
 Running it on a plan that creates a new Postgres database:
@@ -37,7 +41,7 @@ iac-review --plan plan.json
 flowchart TD
     A["Terraform plan (JSON)"] --> B["Load & trim<br/>changed resources only, secrets redacted"]
     B --> C["Rule-based checks<br/>deterministic, no LLM"]
-    B --> D["LLM review<br/>Ollama / Anthropic / OpenAI"]
+    B --> D["LLM review via llm-kit<br/>Ollama / Anthropic / OpenAI"]
     C -- "rule findings" --> D
     C --> E["Merge with guardrails"]
     D --> E
@@ -49,6 +53,14 @@ flowchart TD
 3. **LLM review.** The model sees the trimmed plan plus the rule findings. It returns a risk level, a summary and extra findings in a strict schema.
 4. **Merge.** Combines both sets. The LLM can add findings or raise severity, but never remove or downgrade a rule finding, and it can't replace a fix the rules computed exactly. LLM findings that can't be grounded in the plan are dropped: resources that aren't in it, updates whose new values are all unknown until apply, and low-severity "this is fine" notes. If the LLM fails, the rule findings are still reported.
 5. **Report.** A Markdown report (ready to post as a PR comment) or JSON, plus an exit code you can use to fail a build.
+
+### Design decisions
+
+- **Rules first, the LLM second.** Destroys, open ports and wildcard IAM have exact answers, so code finds them: the same result every run, in milliseconds, with no model needed. The LLM is used for what depends on context, such as whether a setting combination is dangerous for that resource, and for the plain-English summary.
+- **The LLM can escalate, never de-escalate.** A model that misreads a plan should cost a false alarm, not a missed risk. Rule findings and computed fixes are kept as they are, whatever the model says.
+- **Findings must be grounded in the plan.** A claim about a resource that isn't changing, or about values Terraform only knows after apply, can't be checked against the plan, so it's dropped rather than shown as a finding.
+- **Measured, not assumed.** Every change to the prompt, the rules or the model is checked against 25 eval cases with known answers, next to a rules-only baseline that shows what the LLM adds. `scripts/compare-models.sh` uses the same evals to pick a local model.
+- **Built to run on a small local model.** The plan is reduced to the attributes that change, deletes and replacements are kept first when it doesn't fit, and through llm-kit the answer has length limits and a schema it must match. A 9B model on a consumer GPU is enough, and nothing has to leave the machine.
 
 ---
 
